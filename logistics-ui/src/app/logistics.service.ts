@@ -36,4 +36,20 @@ export class LogisticsService {
   public calculatePacking(routeId: number): Observable<PackResponse> {
     return this.http.post<PackResponse>(`${this.apiUrl}/pack/${routeId}`, {});
   }
+
+  // 1. Fetch the current state of the database without running the algorithm
+  public loadExistingPlan(routeId: number): Observable<any[]> {
+    return this.http.get<any[]>(`http://localhost:5059/tinyWebApi/Get/GetCargoForRoute/DataTableText?RouteId=${routeId}`);
+  }
+
+  // 2. Save a specific box's coordinates after drag-and-drop
+  public updateBoxCoordinates(box: CargoBox): Observable<any> {
+    const payload = {
+      BoxId: box.boxId,
+      PackedX: box.packedX,
+      PackedY: box.packedY,
+      PackedZ: box.packedZ
+    };
+    return this.http.post(`http://localhost:5059/tinyWebApi/Post/UpdateBoxCoordinates/NonQueryText`, payload);
+  }
 }

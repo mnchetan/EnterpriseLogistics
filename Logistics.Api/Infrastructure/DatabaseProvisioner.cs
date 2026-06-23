@@ -88,6 +88,7 @@ namespace Logistics.Api.Infrastructure
                                 
                                 -- The Algorithm Output Fields
                                 [IsPacked] BIT NOT NULL DEFAULT 0,
+                                [IsLocked] BIT NOT NULL DEFAULT 0, -- NEW FIELD
                                 [PackedX] INT NULL,
                                 [PackedY] INT NULL,
                                 [PackedZ] INT NULL
@@ -198,16 +199,16 @@ namespace Logistics.Api.Infrastructure
             SET @Counter = 1;
             WHILE @Counter <= 8
             BEGIN
-                INSERT INTO dbo.Boxes (OrderId, LengthMm, WidthMm, HeightMm, WeightKg, IsFragile, IsPacked) 
-                VALUES (@Order1Id, 1200, 1000, 1100, 500.0, 0, 0); 
+                INSERT INTO dbo.Boxes (OrderId, LengthMm, WidthMm, HeightMm, WeightKg, IsFragile, IsPacked, IsLocked) 
+                VALUES (@Order1Id, 1200, 1000, 1100, 500.0, 0, 0, 0); 
                 SET @Counter = @Counter + 1;
             END
 
             SET @Counter = 1;
             WHILE @Counter <= 20
             BEGIN
-                INSERT INTO dbo.Boxes (OrderId, LengthMm, WidthMm, HeightMm, WeightKg, IsFragile, IsPacked) 
-                VALUES (@Order1Id, 600, 400, 300, 5.0, 1, 0); 
+                INSERT INTO dbo.Boxes (OrderId, LengthMm, WidthMm, HeightMm, WeightKg, IsFragile, IsPacked, IsLocked) 
+                VALUES (@Order1Id, 600, 400, 300, 5.0, 1, 0, 0); 
                 SET @Counter = @Counter + 1;
             END
 
@@ -218,16 +219,16 @@ namespace Logistics.Api.Infrastructure
             SET @Counter = 1;
             WHILE @Counter <= 40
             BEGIN
-                INSERT INTO dbo.Boxes (OrderId, LengthMm, WidthMm, HeightMm, WeightKg, IsFragile, IsPacked) 
-                VALUES (@Order2Id, 500, 500, 500, 25.0, 0, 0); 
+                INSERT INTO dbo.Boxes (OrderId, LengthMm, WidthMm, HeightMm, WeightKg, IsFragile, IsPacked, IsLocked) 
+                VALUES (@Order2Id, 500, 500, 500, 25.0, 0, 0, 0); 
                 SET @Counter = @Counter + 1;
             END
 
             SET @Counter = 1;
             WHILE @Counter <= 30
             BEGIN
-                INSERT INTO dbo.Boxes (OrderId, LengthMm, WidthMm, HeightMm, WeightKg, IsFragile, IsPacked) 
-                VALUES (@Order2Id, 500, 500, 400, 10.0, 1, 0); 
+                INSERT INTO dbo.Boxes (OrderId, LengthMm, WidthMm, HeightMm, WeightKg, IsFragile, IsPacked, IsLocked) 
+                VALUES (@Order2Id, 500, 500, 400, 10.0, 1, 0, 0); 
                 SET @Counter = @Counter + 1;
             END
 
@@ -238,16 +239,16 @@ namespace Logistics.Api.Infrastructure
             SET @Counter = 1;
             WHILE @Counter <= 6
             BEGIN
-                INSERT INTO dbo.Boxes (OrderId, LengthMm, WidthMm, HeightMm, WeightKg, IsFragile, IsPacked) 
-                VALUES (@Order3Id, 800, 800, 1500, 150.0, 0, 0); 
+                INSERT INTO dbo.Boxes (OrderId, LengthMm, WidthMm, HeightMm, WeightKg, IsFragile, IsPacked, IsLocked) 
+                VALUES (@Order3Id, 800, 800, 1500, 150.0, 0, 0, 0); 
                 SET @Counter = @Counter + 1;
             END
 
             SET @Counter = 1;
             WHILE @Counter <= 15
             BEGIN
-                INSERT INTO dbo.Boxes (OrderId, LengthMm, WidthMm, HeightMm, WeightKg, IsFragile, IsPacked) 
-                VALUES (@Order3Id, 1200, 300, 200, 8.0, 1, 0); 
+                INSERT INTO dbo.Boxes (OrderId, LengthMm, WidthMm, HeightMm, WeightKg, IsFragile, IsPacked, IsLocked) 
+                VALUES (@Order3Id, 1200, 300, 200, 8.0, 1, 0, 0); 
                 SET @Counter = @Counter + 1;
             END
         ";

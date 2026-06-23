@@ -1,292 +1,468 @@
-# \# Enterprise Logistics 3D Load Planner
+# Enterprise Logistics 3D Load Planner
+
+A full-stack logistics optimization platform that automatically calculates, optimizes, and visualizes truck loading plans in three dimensions.
+
+The application combines route-aware loading logic, cargo stability rules, fragility constraints, and a high-performance 3D Guillotine Space Partitioning engine to generate practical loading plans that can be executed in real warehouse operations.
+
+---
+
+## Overview
+
+Traditional load planning is often performed manually, resulting in:
+
+- Poor space utilization
+- Inefficient unloading sequences
+- Cargo instability
+- Increased risk of damage
+- Inconsistent loading decisions
+
+This system automates the entire process by calculating optimal carton placement coordinates while respecting operational constraints such as:
 
-# 
+- Last-In-First-Out (LIFO) delivery routing
+- Fragile item protection
+- Weight distribution
+- Load stability
+- Vehicle dimensional limits
+
+The resulting load plan can be visualized interactively in a 3D environment.
 
-# A full-stack enterprise application designed to automatically calculate, optimize, and visualize 3D truck load plans. The system uses a Guillotine Split space partitioning algorithm to handle Last-In-First-Out (LIFO) routing and fragility stacking constraints.
+---
+
+## Key Features
 
-# 
+### Intelligent Load Planning
 
-# \## 🏗️ Architecture \& Tech Stack
+- Automated carton placement
+- Route-aware loading strategy
+- LIFO unloading optimization
+- Support for mixed carton dimensions
+- Real-time space utilization calculation
 
-# 
+### Cargo Protection
 
-# \* \*\*Backend:\*\* .NET 10 (C#)
+- Heavy cartons positioned first
+- Fragile cartons stacked later
+- Stable load foundation generation
+- Floating placement prevention
 
-# \* \*\*Framework:\*\* `tiny.webapi` (Configuration-driven SQL data access)
+### 3D Visualization
 
-# \* \*\*Database:\*\* SQL Server LocalDB (`LogisticsDB.mdf`)
+- Interactive truck visualization
+- Real-time cargo rendering
+- Camera controls and zoom
+- Placement coordinate inspection
 
-# \* \*\*Frontend:\*\* Angular 16 (TypeScript)
+### Enterprise Architecture
 
-# \* \*\*3D Visualization:\*\* Three.js / WebGL
+- Configuration-driven backend
+- Database-first design
+- Automated database provisioning
+- REST API integration
+- Scalable service architecture
 
-# 
+---
 
-# \## 🚀 Getting Started
+## Technology Stack
 
-# 
+| Layer | Technology |
+|---------|---------|
+| Backend | .NET 10 |
+| Language | C# |
+| Data Access | tiny.webapi |
+| Database | SQL Server LocalDB |
+| Frontend | Angular 16 |
+| UI Language | TypeScript |
+| Visualization | Three.js |
+| Rendering Engine | WebGL |
 
-# \### Prerequisites
+---
 
-# \* .NET 10 SDK
+## System Architecture
 
-# \* Node.js \& npm
+```text
++------------------------------------------------------+
+|                    Angular UI                        |
+|                 (Three.js Viewer)                    |
++--------------------------+---------------------------+
+                           |
+                           v
++------------------------------------------------------+
+|                    REST API                          |
+|                 .NET 10 Backend                      |
++--------------------------+---------------------------+
+                           |
+                           v
++------------------------------------------------------+
+|           3D Packing Algorithm Engine                |
+|      Guillotine Split Space Partitioning             |
++--------------------------+---------------------------+
+                           |
+                           v
++------------------------------------------------------+
+|                tiny.webapi Layer                     |
+|       Configuration Driven Data Access               |
++--------------------------+---------------------------+
+                           |
+                           v
++------------------------------------------------------+
+|                SQL Server LocalDB                    |
++------------------------------------------------------+
+```
 
-# \* Angular CLI (`npm install -g @angular/cli`)
+---
 
-# \* SQL Server LocalDB
+## Getting Started
 
-# 
+### Prerequisites
 
-# \### Environment Setup
+Install the following software:
 
-# 
+- .NET 10 SDK
+- Node.js
+- npm
+- Angular CLI
+- SQL Server LocalDB
+
+Install Angular CLI:
+
+```bash
+npm install -g @angular/cli
+```
 
-# The application runs on the following dedicated ports to avoid browser security restrictions (e.g., SIP port blocks):
+---
 
-# \* \*\*REST API:\*\* `http://localhost:5059`
+## Default Ports
 
-# \* \*\*Angular UI:\*\* `http://localhost:5100`
+| Service | Address |
+|----------|----------|
+| API | http://localhost:5059 |
+| UI | http://localhost:5100 |
 
-# 
+---
 
-# \### Running the API
+## Running the Backend
 
-# The backend includes an idempotent `DatabaseProvisioner` that will automatically create the `.mdf` database, build the schema, and seed test data on the first run.
+The backend automatically creates and initializes the database on first execution.
 
-# 
+```bash
+cd Logistics.Api
 
-# ```bash
+dotnet restore
+dotnet build
 
-# cd Logistics.Api
+dotnet run --urls "http://localhost:5059"
+```
 
-# dotnet build
+### Automatic Database Setup
 
-# dotnet run --urls "http://localhost:5059"
+On first startup the application:
 
-# ```
+1. Creates the LocalDB database
+2. Builds required tables
+3. Creates indexes
+4. Seeds sample data
+5. Verifies connectivity
 
-# 
+No manual SQL execution is required.
 
-# \### Running the UI
+---
 
-# ```bash
+## Running the Frontend
 
-# cd logistics-ui
+```bash
+cd logistics-ui
 
-# npm install
+npm install
 
-# ng serve --port 5100
+ng serve --port 5100
+```
 
-# ```
+Open:
 
-# Navigate to `http://localhost:5100` in your browser to access the dispatch dashboard.
+```text
+http://localhost:5100
+```
 
-# 
+---
 
-# \---
+## Project Structure
 
-# 
+```text
+EnterpriseLogistics
+│
+├── Logistics.Api
+│   │
+│   ├── Controllers
+│   │   └── AlgorithmController.cs
+│   │
+│   ├── Infrastructure
+│   │   └── DatabaseProvisioner.cs
+│   │
+│   ├── Models
+│   │   ├── CargoBox.cs
+│   │   ├── TruckSpace.cs
+│   │   └── FreeSpace.cs
+│   │
+│   ├── Queries
+│   │   └── queries.Development.json
+│   │
+│   ├── Program.cs
+│   └── Logistics.Api.csproj
+│
+└── logistics-ui
+    │
+    ├── src
+    │   ├── app
+    │   │   ├── app.component.ts
+    │   │   ├── app.module.ts
+    │   │   └── logistics.service.ts
+    │   │
+    │   ├── index.html
+    │   └── styles.css
+    │
+    ├── angular.json
+    └── package.json
+```
 
-# \## 📂 Project Structure
+---
 
-# 
+# API Endpoints
 
-# ```text
+Base URL:
 
-# EnterpriseLogistics/
+```text
+http://localhost:5059
+```
 
-# │
+---
 
-# ├── Logistics.Api/                     # .NET 10 Backend
+## Generate Load Plan
 
-# │   ├── Controllers/
+Calculates carton placement coordinates and stores the resulting plan.
 
-# │   │   └── AlgorithmController.cs     # 3D Packing Engine \& tiny.webapi integration
+### Request
 
-# │   ├── Models/
+```http
+POST /tinyWebApi/Algorithm/pack/{routeId}
+```
 
-# │   │   ├── CargoBox.cs                # Box POCO (Includes 3D Coordinates)
+### Response
 
-# │   │   ├── TruckSpace.cs              # Route Dimensions POCO
+```json
+{
+  "message": "Successfully calculated load plan.",
+  "packedBoxes": [
+    {
+      "boxId": 105,
+      "stopSequence": 1,
+      "packedX": 0,
+      "packedY": 0,
+      "packedZ": 0,
+      "isPacked": true
+    }
+  ]
+}
+```
 
-# │   │   └── FreeSpace.cs               # Guillotine Partitioning Model
+---
 
-# │   ├── Infrastructure/
+## Get Vehicle Dimensions
 
-# │   │   └── DatabaseProvisioner.cs     # Automated LocalDB Schema \& Data Seeding
+```http
+GET /tinyWebApi/Get/GetTruckDimensionsForRoute/DataTableText
+```
 
-# │   ├── Queries/
+### Parameters
 
-# │   │   └── queries.Development.json   # tiny.webapi SQL definitions (No EF needed)
+| Parameter | Type |
+|------------|--------|
+| RouteId | Integer |
 
-# │   ├── Program.cs                     # API Bootstrapper \& CORS Policies
+---
 
-# │   └── Logistics.Api.csproj
+## Get Route Cargo
 
-# │
+```http
+GET /tinyWebApi/Get/GetUnpackedCargoForRoute/DataTableText
+```
 
-# └── logistics-ui/                      # Angular 16 Frontend
+### Parameters
 
-# &#x20;   ├── src/
+| Parameter | Type |
+|------------|--------|
+| RouteId | Integer |
 
-# &#x20;   │   ├── app/
+---
 
-# &#x20;   │   │   ├── app.component.ts       # Main Dashboard \& Three.js Canvas Engine
+## Update Carton Coordinates
 
-# &#x20;   │   │   ├── app.module.ts          # Module Declarations (HttpClientModule)
+```http
+POST /tinyWebApi/Post/UpdateBoxCoordinates/NonQueryText
+```
 
-# &#x20;   │   │   └── logistics.service.ts   # HTTP Service for API communication
+### Request Body
 
-# &#x20;   │   ├── index.html
+```json
+{
+  "BoxId": 1,
+  "PackedX": 100,
+  "PackedY": 200,
+  "PackedZ": 0
+}
+```
 
-# &#x20;   │   └── styles.css                 # Global Enterprise Dark Theme styles
+---
 
-# &#x20;   ├── angular.json                   # Angular workspace config (Port 5100)
+## Reset Load Plan
 
-# &#x20;   └── package.json                   # Node dependencies (three.js)
+```http
+POST /tinyWebApi/Post/ResetAllBoxesToUnpacked/NonQueryText
+```
 
-# ```
+---
 
-# 
+# Packing Algorithm
 
-# \---
+## What Is It?
 
-# 
+The packing engine is a deterministic 3D Guillotine Split Space Partitioning algorithm.
 
-# \## 🔌 API Call Details (Endpoints)
+A useful way to think about it is:
 
-# 
+> A warehouse-optimized version of 3D Tetris that follows real transportation and loading rules.
 
-# The backend exposes native database interactions via `tiny.webapi` configurations, alongside a custom algorithm engine. All endpoints are hosted on `http://localhost:5059`.
+Unlike generic packing algorithms, the engine understands:
 
-# 
+- Delivery sequence
+- Carton fragility
+- Load stability
+- Space optimization
 
-# \### 1. 3D Packing Algorithm Engine
+---
 
-# Calculates the spatial coordinates for all unpacked boxes on a given route, writes the coordinates to the database, and returns the manifest.
+## Loading Strategy
 
-# 
+| Rule | Purpose |
+|--------|---------|
+| LIFO Sorting | Delivery optimization |
+| Heavy First | Stable foundation |
+| Fragile Last | Damage prevention |
+| Lowest Z First | Structural support |
+| Back To Front | Efficient unloading |
+| Left To Right | Organized placement |
+| Guillotine Split | Space tracking |
+| Cleanup Pass | Performance optimization |
 
-# \* \*\*URL:\*\* `http://localhost:5059/tinyWebApi/Algorithm/pack/{routeId}`
+---
 
-# \* \*\*Method:\*\* `POST`
+## Algorithm Workflow
 
-# \* \*\*Response (Success 200):\*\*
+### Stage 1 — Shipment Optimization
 
-# &#x20; ```json
+Before loading begins:
 
-# &#x20; {
+- Cargo is analyzed
+- Delivery sequence is evaluated
+- Heavy cartons are prioritized
+- Fragile cartons are deferred
 
-# &#x20;   "message": "Successfully calculated load plan.",
+### Stage 2 — Create Initial Free Space
 
-# &#x20;   "packedBoxes": \[
+The truck is represented as one large empty volume.
 
-# &#x20;     {
+```text
++----------------------+
+|                      |
+|     Empty Truck      |
+|                      |
++----------------------+
+```
 
-# &#x20;       "boxId": 105,
+### Stage 3 — Find Best Position
 
-# &#x20;       "stopSequence": 1,
+For every carton:
 
-# &#x20;       "length": 1200,
+1. Search all free spaces
+2. Evaluate fit
+3. Select optimal location
+4. Place carton
 
-# &#x20;       "width": 1000,
+Priority order:
 
-# &#x20;       "height": 1100,
+1. Lowest Z
+2. Lowest Y
+3. Lowest X
 
-# &#x20;       "weight": 500.0,
+### Stage 4 — Guillotine Split
 
-# &#x20;       "isFragile": false,
+After placement:
 
-# &#x20;       "isPacked": true,
+```text
++----------------------+
+|      Space A         |
++----------+-----------+
+| Carton   | Space B   |
++----------+-----------+
+|      Space C         |
++----------------------+
+```
 
-# &#x20;       "packedX": 0,
+The original volume is replaced with:
 
-# &#x20;       "packedY": 0,
+- Top Space
+- Side Space
+- Front Space
 
-# &#x20;       "packedZ": 0
+### Stage 5 — Space Cleanup
 
-# &#x20;     }
+Unused fragments are removed.
 
-# &#x20;   ]
+Examples:
 
-# &#x20; }
+- Narrow gaps
+- Tiny slivers
+- Non-usable volumes
 
-# &#x20; ```
+This improves both packing speed and placement quality.
 
-# 
+---
 
-# \### 2. Native Data Access (tiny.webapi)
+## Benefits
 
-# These endpoints read directly from the `queries.Development.json` specifications, requiring no custom C# repository code.
+### Operational
 
-# 
+- Faster loading
+- Faster unloading
+- Reduced manual planning
 
-# \*\*Get Truck Dimensions\*\*
+### Financial
 
-# \* \*\*URL:\*\* `http://localhost:5059/tinyWebApi/Get/GetTruckDimensionsForRoute/DataTableText?RouteId={id}`
+- Improved vehicle utilization
+- Reduced transportation cost
+- Lower damage rates
 
-# \* \*\*Method:\*\* `GET`
+### Technical
 
-# 
+- Deterministic results
+- Millisecond execution time
+- Scalable architecture
+- Enterprise-ready deployment
 
-# \*\*Get Cargo Roster\*\*
+---
 
-# \* \*\*URL:\*\* `http://localhost:5059/tinyWebApi/Get/GetUnpackedCargoForRoute/DataTableText?RouteId={id}`
+## Future Enhancements
 
-# \* \*\*Method:\*\* `GET`
+- Multi-truck optimization
+- Weight balancing analysis
+- AI-assisted packing recommendations
+- Multi-depot route planning
+- Real-time warehouse integration
+- Live WMS connectivity
 
-# 
+---
 
-# \*\*Update Coordinates (Internal Use)\*\*
+## License
 
-# \* \*\*URL:\*\* `http://localhost:5059/tinyWebApi/Post/UpdateBoxCoordinates/NonQueryText`
+Internal enterprise demonstration project.
 
-# \* \*\*Method:\*\* `POST`
-
-# \* \*\*Body:\*\*
-
-# &#x20; ```json
-
-# &#x20; {
-
-# &#x20;   "BoxId": 1,
-
-# &#x20;   "PackedX": 100,
-
-# &#x20;   "PackedY": 200,
-
-# &#x20;   "PackedZ": 0
-
-# &#x20; }
-
-# &#x20; ```
-
-# 
-
-# \*\*Reset Load Plan (Wipe Coordinates)\*\*
-
-# \* \*\*URL:\*\* `http://localhost:5059/tinyWebApi/Post/ResetAllBoxesToUnpacked/NonQueryText`
-
-# \* \*\*Method:\*\* `POST`
-
-# 
-
-# \---
-
-# 
-
-# \## 🧠 Algorithm Overview
-
-# 
-
-# The `AlgorithmController` utilizes a \*\*3D Guillotine Split Space Partitioning\*\* approach:
-
-# 1\. \*\*LIFO Sorting:\*\* Boxes are sorted in reverse delivery order.
-
-# 2\. \*\*Fragility Sorting:\*\* Heavy, sturdy objects are prioritized to form base layers (`Z = 0`).
-
-# 3\. \*\*Partitioning:\*\* When a box is placed into the truck, the remaining negative space is split into three new `FreeSpace` boundaries (Top, Right, Front).
-
-# 4\. \*\*Iterative Placement:\*\* The engine continually hunts for the lowest and deepest available `FreeSpace` that can physically contain the next box in the queue.
-
+All rights reserved.

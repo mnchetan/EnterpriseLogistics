@@ -45,7 +45,10 @@ namespace Logistics.Api.Controllers
                 QuerySpecification cargoQuerySpec = Global.GetQuerySpecificationByQueryName("GetUnpackedCargoForRoute");
                 QuerySpecification updateQuerySpec = Global.GetQuerySpecificationByQueryName("UpdateBoxCoordinates");
 
-                if (routeQuerySpec == null || cargoQuerySpec == null || updateQuerySpec == null)
+                // NEW: Load the reset query
+                QuerySpecification resetQuerySpec = Global.GetQuerySpecificationByQueryName("ResetAllBoxesToUnpacked");
+
+                if (routeQuerySpec == null || cargoQuerySpec == null || updateQuerySpec == null || resetQuerySpec == null)
                 {
                     Global.LogError("Missing required query specifications in JSON configuration.", null);
                     return StatusCode(500, "Server configuration error.");
@@ -55,7 +58,6 @@ namespace Logistics.Api.Controllers
                 // 2. DATA ACCESS VIA TINY.WEBAPI 
                 // =========================================================================
 
-                // FIX: Use the natively injected 'this.sqlContext' and set AutoDispose to FALSE!
                 using DataBaseManagerSql dbManager = new(sqlContext, routeQuerySpec, false);
 
                 List<DatabaseParameters> routeParams =
@@ -63,9 +65,13 @@ namespace Logistics.Api.Controllers
                     new DatabaseParameters { Name = "RouteId", Value = routeId }
                 ];
 
+                // NEW: Wipe the existing load plan before doing the new math
+                Global.LogInformation("[Algorithm Engine] Resetting previous load plan for recalculation.");
+                dbManager.ExecNonQuery(resetQuerySpec, []);
+
                 // A. Fetch Truck Dimensions
                 Global.LogDebug($"[Algorithm Engine] Fetching truck dimensions.");
-                DataTable truckDt = dbManager.ExecDataTable(routeQuerySpec, routeParams);
+                System.Data.DataTable truckDt = dbManager.ExecDataTable(routeQuerySpec, routeParams);
 
                 if (truckDt.Rows.Count == 0) return NotFound("Route not found.");
 
@@ -73,9 +79,9 @@ namespace Logistics.Api.Controllers
                 truck.Width = Convert.ToInt32(truckDt.Rows[0]["TruckWidthMm"]);
                 truck.Height = Convert.ToInt32(truckDt.Rows[0]["TruckHeightMm"]);
 
-                // B. Fetch Unpacked Cargo
+                // B. Fetch Unpacked Cargo (This will now successfully grab all 119 boxes every time)
                 Global.LogDebug($"[Algorithm Engine] Fetching unpacked cargo.");
-                DataTable cargoDt = dbManager.ExecDataTable(cargoQuerySpec, routeParams);
+                System.Data.DataTable cargoDt = dbManager.ExecDataTable(cargoQuerySpec, routeParams);
 
                 foreach (DataRow row in cargoDt.Rows)
                 {
@@ -100,7 +106,6 @@ namespace Logistics.Api.Controllers
 
                     Global.LogInformation("[Algorithm Engine] Beginning database transaction.");
 
-                    // The transaction will safely lock the connection until Commit or Rollback
                     dbManager.BeginTransaction();
                     try
                     {
@@ -113,7 +118,6 @@ namespace Logistics.Api.Controllers
                                 new DatabaseParameters { Name = "PackedZ", Value = box.PackedZ },
                                 new DatabaseParameters { Name = "BoxId", Value = box.BoxId }
                             ];
-                            // Execute using the Update JSON Specification
                             dbManager.ExecNonQuery(updateQuerySpec, updateParams);
                         }
                         dbManager.Commit();
@@ -126,7 +130,6 @@ namespace Logistics.Api.Controllers
                     }
                 }
 
-                // The 'using dbManager' block ending here will now safely call Dispose() and close the connection
                 return Ok(new { message = $"Successfully calculated load plan.", packedBoxes = unpackedBoxes });
             }
             catch (Exception ex)
@@ -136,42 +139,82 @@ namespace Logistics.Api.Controllers
             }
         }
 
+        //This algorithm is a 3D Guillotine Split Space Partitioning engine.In simple terms, it is an intelligent "3D Tetris" solver that follows real-world trucking rules.
+
+        //If you were explaining this to a manager or a colleague, you can break it down into these five clear stages:
+        //1. The "Pre-Game" (Intelligent Sorting)
+
+        //Before a single box is moved, the algorithm sorts the entire manifest. It doesn't just pick boxes at random; it follows a Logistics-First logic:
+
+        //LIFO (Last-In, First-Out): It looks at the delivery route and picks boxes for the last stop first.These go to the very back of the truck so they aren't in the way during earlier stops.
+
+        //The "Foundation" Rule: It looks for heavy, sturdy boxes to pack first.
+
+        //The "Fragile" Rule: It identifies fragile items and moves them to the end of the line so they naturally end up on the top, where they won't be crushed.
+
+        //2. The Initial State (One Giant Void)
+
+        //The algorithm starts by imagining the truck as one massive, empty "Free Space" cube.It defines this space using X (width), Y(depth), and Z(height) coordinates.
+        //3. The Search(Finding the "Best" Pocket)
+
+        //For every box in our sorted list, the algorithm looks at its available "pockets" of free space.To keep the load stable, it sorts these spaces with a strict priority:
+
+        //Z-Axis first: "Is this space on the floor?" (Always try to put things on the floor or on top of another box—no floating).
+
+        //Y-Axis second: "Is this space at the very back?" (Pack from the back to the front).
+
+        //X-Axis third: "Is this space on the left?" (Pack in organized columns).
+
+        //It then picks the first pocket that is large enough to fit the box’s Width, Length, and Height.
+        //4. The "Guillotine Split" (The Clever Part)
+
+        //This is where the magic happens.Once the algorithm places a box into a large empty space, that big space is "killed" and replaced by three new, smaller free spaces:
+
+        //Space A(The Top): The empty area directly above the box you just placed.
+
+        //Space B (The Side): The empty area to the right of the box.
+
+        //Space C (The Front): The empty area in front of the box leading toward the truck doors.
+
+        //By constantly splitting big spaces into three smaller "rectangles," the algorithm always knows exactly where the remaining "holes" are in the truck.
+        //5. Cleanup (Ignoring the Shards)
+
+        //At the end of every step, the algorithm performs "Garbage Collection." If a leftover space is tiny(less than 10cm or 4 inches), it deletes that space from its memory.This prevents the computer from wasting time trying to fit a large box into a tiny "sliver" of space that only a letter could fit into.
+        //Why this is a "Smart" Algorithm (The "So What?"):
+
+        //Safety: Because of the sorting, heavy stuff is at the bottom, and fragile stuff is on top automatically.
+
+        //Efficiency: It packs from the bottom-up and back-to-front, which is exactly how human loaders work, but it does the math in milliseconds to ensure zero wasted volume.
+
+        //Stability: By prioritizing the lowest Z-coordinate, it ensures that every box has a "floor" beneath it, preventing items from shifting or falling in the 3D model.
         private static void ExecutePackingAlgorithm(TruckSpace truck, List<CargoBox> boxes)
         {
-            // 1. Strict Sorting: 
-            // - Reverse Route Order (LIFO)
-            // - Heavy sturdy boxes first (form the base)
-            // - Fragile / light boxes last (go on top)
             List<CargoBox> sortedBoxes = [.. boxes
-        .OrderByDescending(b => b.StopSequence)
-        .ThenBy(b => b.IsFragile ? 1 : 0)
-        .ThenByDescending(b => b.Weight)];
+                .OrderByDescending(b => b.StopSequence)
+                .ThenBy(b => b.IsFragile ? 1 : 0)
+                .ThenByDescending(b => b.Weight)];
 
-            // 2. Initialize the truck as one massive empty space
             List<FreeSpace> availableSpaces =
             [
                 new FreeSpace
-        {
-            X = 0, Y = 0, Z = 0,
-            Width = truck.Width,
-            Length = truck.Length,
-            Height = truck.Height
-        }
+                {
+                    X = 0, Y = 0, Z = 0,
+                    Width = truck.Width,
+                    Length = truck.Length,
+                    Height = truck.Height
+                }
             ];
 
             foreach (CargoBox box in sortedBoxes)
             {
-                // 3. Find the "Best" space for this box. 
-                // We sort spaces to always favor Bottom (Z), then Deepest (Y), then Left (X)
                 availableSpaces = [.. availableSpaces
-            .OrderBy(s => s.Z)
-            .ThenBy(s => s.Y)
-            .ThenBy(s => s.X)];
+                    .OrderBy(s => s.Z)
+                    .ThenBy(s => s.Y)
+                    .ThenBy(s => s.X)];
 
                 FreeSpace? bestSpace = null;
                 int spaceIndex = -1;
 
-                // Hunt for a space that can fully contain the box dimensions
                 for (int i = 0; i < availableSpaces.Count; i++)
                 {
                     FreeSpace space = availableSpaces[i];
@@ -190,16 +233,13 @@ namespace Logistics.Api.Controllers
                     continue;
                 }
 
-                // 4. Place the box in the bottom-left-back corner of the chosen space
                 box.PackedX = bestSpace.X;
                 box.PackedY = bestSpace.Y;
                 box.PackedZ = bestSpace.Z;
                 box.IsPacked = true;
 
-                // 5. Guillotine Split the remaining space around the box
                 availableSpaces.RemoveAt(spaceIndex);
 
-                // Space A: Top of the box
                 if (bestSpace.Height - box.Height > 0)
                 {
                     availableSpaces.Add(new FreeSpace
@@ -213,7 +253,6 @@ namespace Logistics.Api.Controllers
                     });
                 }
 
-                // Space B: Right of the box
                 if (bestSpace.Width - box.Width > 0)
                 {
                     availableSpaces.Add(new FreeSpace
@@ -227,7 +266,6 @@ namespace Logistics.Api.Controllers
                     });
                 }
 
-                // Space C: Front of the box
                 if (bestSpace.Length - box.Length > 0)
                 {
                     availableSpaces.Add(new FreeSpace
@@ -241,8 +279,6 @@ namespace Logistics.Api.Controllers
                     });
                 }
 
-                // 6. Optimization: Clean up tiny unusable shards of space to save memory/CPU
-                // (Assuming anything smaller than 100mm on any side is unusable padding)
                 availableSpaces.RemoveAll(s => s.Width < 100 || s.Length < 100 || s.Height < 100);
             }
         }
