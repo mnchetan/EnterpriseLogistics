@@ -23,6 +23,7 @@
         public int PackedX { get; set; }
         public int PackedY { get; set; }
         public int PackedZ { get; set; }
+        public bool IsLocked { get; internal set; }
     }
 
     public class FreeSpace

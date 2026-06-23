@@ -102,7 +102,7 @@ namespace Logistics.Api.Controllers
                 // =========================================================================
                 if (unpackedBoxes.Count != 0)
                 {
-                    ExecutePackingAlgorithm(truck, unpackedBoxes);
+                    ExecuteSmartPackingAlgorithm(truck, unpackedBoxes);
 
                     Global.LogInformation("[Algorithm Engine] Beginning database transaction.");
 
@@ -138,149 +138,297 @@ namespace Logistics.Api.Controllers
                 return StatusCode(500, "An error occurred. Check logs.");
             }
         }
-
-        //This algorithm is a 3D Guillotine Split Space Partitioning engine.In simple terms, it is an intelligent "3D Tetris" solver that follows real-world trucking rules.
-
-        //If you were explaining this to a manager or a colleague, you can break it down into these five clear stages:
-        //1. The "Pre-Game" (Intelligent Sorting)
-
-        //Before a single box is moved, the algorithm sorts the entire manifest. It doesn't just pick boxes at random; it follows a Logistics-First logic:
-
-        //LIFO (Last-In, First-Out): It looks at the delivery route and picks boxes for the last stop first.These go to the very back of the truck so they aren't in the way during earlier stops.
-
-        //The "Foundation" Rule: It looks for heavy, sturdy boxes to pack first.
-
-        //The "Fragile" Rule: It identifies fragile items and moves them to the end of the line so they naturally end up on the top, where they won't be crushed.
-
-        //2. The Initial State (One Giant Void)
-
-        //The algorithm starts by imagining the truck as one massive, empty "Free Space" cube.It defines this space using X (width), Y(depth), and Z(height) coordinates.
-        //3. The Search(Finding the "Best" Pocket)
-
-        //For every box in our sorted list, the algorithm looks at its available "pockets" of free space.To keep the load stable, it sorts these spaces with a strict priority:
-
-        //Z-Axis first: "Is this space on the floor?" (Always try to put things on the floor or on top of another box—no floating).
-
-        //Y-Axis second: "Is this space at the very back?" (Pack from the back to the front).
-
-        //X-Axis third: "Is this space on the left?" (Pack in organized columns).
-
-        //It then picks the first pocket that is large enough to fit the box’s Width, Length, and Height.
-        //4. The "Guillotine Split" (The Clever Part)
-
-        //This is where the magic happens.Once the algorithm places a box into a large empty space, that big space is "killed" and replaced by three new, smaller free spaces:
-
-        //Space A(The Top): The empty area directly above the box you just placed.
-
-        //Space B (The Side): The empty area to the right of the box.
-
-        //Space C (The Front): The empty area in front of the box leading toward the truck doors.
-
-        //By constantly splitting big spaces into three smaller "rectangles," the algorithm always knows exactly where the remaining "holes" are in the truck.
-        //5. Cleanup (Ignoring the Shards)
-
-        //At the end of every step, the algorithm performs "Garbage Collection." If a leftover space is tiny(less than 10cm or 4 inches), it deletes that space from its memory.This prevents the computer from wasting time trying to fit a large box into a tiny "sliver" of space that only a letter could fit into.
-        //Why this is a "Smart" Algorithm (The "So What?"):
-
-        //Safety: Because of the sorting, heavy stuff is at the bottom, and fragile stuff is on top automatically.
-
-        //Efficiency: It packs from the bottom-up and back-to-front, which is exactly how human loaders work, but it does the math in milliseconds to ensure zero wasted volume.
-
-        //Stability: By prioritizing the lowest Z-coordinate, it ensures that every box has a "floor" beneath it, preventing items from shifting or falling in the 3D model.
-        private static void ExecutePackingAlgorithm(TruckSpace truck, List<CargoBox> boxes)
+        /// <summary>
+        /// Executes the Empty Maximal Space (EMS) 3D bin packing algorithm.
+        /// </summary>
+        /// <remarks>
+        /// This orchestrator method performs three main phases:
+        /// 1. Pre-Pass: Identifies manually "locked" boxes and carves out initial free spaces around them.
+        /// 2. Sorting: Orders unpacked boxes by Route Sequence (LIFO), Fragility (sturdy first), and Weight (heaviest first).
+        /// 3. Packing Pass: Iterates through unpacked boxes, finds the lowest, deepest, and left-most valid space, 
+        /// places the box, and dynamically generates new overlapping maximal spaces.
+        /// </remarks>
+        /// <param name="truck">The dimensions of the container or truck.</param>
+        /// <param name="allBoxes">The complete list of boxes, including both locked and unpacked items.</param>
+        private static void ExecuteSmartPackingAlgorithm(TruckSpace truck, List<CargoBox> allBoxes)
         {
-            List<CargoBox> sortedBoxes = [.. boxes
+            // 1. Initialize the truck as one massive empty space
+            List<FreeSpace> availableSpaces = [
+                new FreeSpace { X = 0, Y = 0, Z = 0, Width = truck.Width, Length = truck.Length, Height = truck.Height }
+            ];
+
+            // 2. PRE-PASS: Carve out spaces for "Locked" manual override boxes
+            // The algorithm treats these as fixed obstacles before it even starts packing.
+            List<CargoBox> lockedBoxes = [.. allBoxes.Where(b => b.IsLocked)];
+            foreach (CargoBox locked in lockedBoxes)
+            {
+                List<FreeSpace> newlyFragmentedSpaces = [];
+                foreach (FreeSpace space in availableSpaces)
+                {
+                    newlyFragmentedSpaces.AddRange(SubtractBoxFromSpace(space, locked));
+                }
+                availableSpaces = CleanUpFreeSpaces(newlyFragmentedSpaces);
+            }
+
+            // 3. PACKING PASS: Pack the remaining boxes
+            List<CargoBox> unpackedBoxes = [.. allBoxes.Where(b => !b.IsLocked)
                 .OrderByDescending(b => b.StopSequence)
                 .ThenBy(b => b.IsFragile ? 1 : 0)
                 .ThenByDescending(b => b.Weight)];
 
-            List<FreeSpace> availableSpaces =
-            [
-                new FreeSpace
-                {
-                    X = 0, Y = 0, Z = 0,
-                    Width = truck.Width,
-                    Length = truck.Length,
-                    Height = truck.Height
-                }
-            ];
-
-            foreach (CargoBox box in sortedBoxes)
+            foreach (CargoBox box in unpackedBoxes)
             {
-                availableSpaces = [.. availableSpaces
-                    .OrderBy(s => s.Z)
-                    .ThenBy(s => s.Y)
-                    .ThenBy(s => s.X)];
+                // Sort spaces: lowest Z (floor), then lowest Y (deepest), then lowest X (left)
+                availableSpaces = [.. availableSpaces.OrderBy(s => s.Z).ThenBy(s => s.Y).ThenBy(s => s.X)];
 
                 FreeSpace? bestSpace = null;
-                int spaceIndex = -1;
 
-                for (int i = 0; i < availableSpaces.Count; i++)
+                foreach (FreeSpace space in availableSpaces)
                 {
-                    FreeSpace space = availableSpaces[i];
+                    // 1. Does it physically fit inside the free space boundaries?
                     if (box.Width <= space.Width && box.Length <= space.Length && box.Height <= space.Height)
                     {
-                        bestSpace = space;
-                        spaceIndex = i;
-                        break;
+                        // 2. NEW: Is it legally safe to put it here?
+                        if (IsPlacementSafe(box, space, allBoxes))
+                        {
+                            bestSpace = space;
+                            break; // Space found and validated!
+                        }
                     }
                 }
 
                 if (bestSpace == null)
                 {
-                    Global.LogWarning($"[Algorithm Engine] BoxId {box.BoxId} cannot fit in the remaining free space.");
+                    Global.LogWarning($"[Algorithm Engine] BoxId {box.BoxId} cannot fit or violates fragility rules.");
                     box.IsPacked = false;
                     continue;
                 }
 
+                // Place the box
                 box.PackedX = bestSpace.X;
                 box.PackedY = bestSpace.Y;
                 box.PackedZ = bestSpace.Z;
                 box.IsPacked = true;
 
-                availableSpaces.RemoveAt(spaceIndex);
-
-                if (bestSpace.Height - box.Height > 0)
+                // 4. EMS SPLIT: Slicing ALL current free spaces against the newly placed box
+                List<FreeSpace> newlyFragmentedSpaces = [];
+                foreach (FreeSpace space in availableSpaces)
                 {
-                    availableSpaces.Add(new FreeSpace
-                    {
-                        X = bestSpace.X,
-                        Y = bestSpace.Y,
-                        Z = bestSpace.Z + box.Height,
-                        Width = box.Width,
-                        Length = box.Length,
-                        Height = bestSpace.Height - box.Height
-                    });
+                    newlyFragmentedSpaces.AddRange(SubtractBoxFromSpace(space, box));
                 }
 
-                if (bestSpace.Width - box.Width > 0)
-                {
-                    availableSpaces.Add(new FreeSpace
-                    {
-                        X = bestSpace.X + box.Width,
-                        Y = bestSpace.Y,
-                        Z = bestSpace.Z,
-                        Width = bestSpace.Width - box.Width,
-                        Length = box.Length,
-                        Height = bestSpace.Height
-                    });
-                }
-
-                if (bestSpace.Length - box.Length > 0)
-                {
-                    availableSpaces.Add(new FreeSpace
-                    {
-                        X = bestSpace.X,
-                        Y = bestSpace.Y + box.Length,
-                        Z = bestSpace.Z,
-                        Width = bestSpace.Width,
-                        Length = bestSpace.Length - box.Length,
-                        Height = bestSpace.Height
-                    });
-                }
-
-                availableSpaces.RemoveAll(s => s.Width < 100 || s.Length < 100 || s.Height < 100);
+                // 5. GARBAGE COLLECTION: Clean up the overlapped spaces
+                availableSpaces = CleanUpFreeSpaces(newlyFragmentedSpaces);
             }
+        }
+
+        // --- CORE EMS GEOMETRY ENGINE ---
+
+        /// <summary>
+        /// Carves out up to six new overlapping FreeSpaces around a newly placed or locked box.
+        /// </summary>
+        /// <remarks>
+        /// This is the core geometric engine of the EMS algorithm. It checks for 3D intersection between 
+        /// a given free space and a physical box. If they intersect, it generates new "maximal" spaces 
+        /// representing the empty air extending to the limits of the parent space above, below, left, right, 
+        /// in front of, and behind the box.
+        /// </remarks>
+        /// <param name="space">The original free space being evaluated.</param>
+        /// <param name="box">The physical box acting as an obstacle within the space.</param>
+        /// <returns>A list of newly generated, overlapping free spaces.</returns>
+        private static List<FreeSpace> SubtractBoxFromSpace(FreeSpace space, CargoBox box)
+        {
+            // 1. Check for 3D Intersection. If the box doesn't physically touch the space, the space survives intact.
+            bool intersectsX = box.PackedX < space.X + space.Width && box.PackedX + box.Width > space.X;
+            bool intersectsY = box.PackedY < space.Y + space.Length && box.PackedY + box.Length > space.Y;
+            bool intersectsZ = box.PackedZ < space.Z + space.Height && box.PackedZ + box.Height > space.Z;
+
+            if (!intersectsX || !intersectsY || !intersectsZ) return [space];
+
+            List<FreeSpace> fragments = [];
+
+            // 2. Generate overlapping "Maximal" spaces around the box
+
+            // Space above the box
+            if (box.PackedZ + box.Height < space.Z + space.Height)
+            {
+                fragments.Add(new FreeSpace
+                {
+                    X = space.X,
+                    Y = space.Y,
+                    Z = box.PackedZ + box.Height,
+                    Width = space.Width,
+                    Length = space.Length,
+                    Height = (space.Z + space.Height) - (box.PackedZ + box.Height)
+                });
+            }
+            // Space below the box (crucial if a user 'locked' a floating box via the UI)
+            if (box.PackedZ > space.Z)
+            {
+                fragments.Add(new FreeSpace
+                {
+                    X = space.X,
+                    Y = space.Y,
+                    Z = space.Z,
+                    Width = space.Width,
+                    Length = space.Length,
+                    Height = box.PackedZ - space.Z
+                });
+            }
+            // Space to the right of the box
+            if (box.PackedX + box.Width < space.X + space.Width)
+            {
+                fragments.Add(new FreeSpace
+                {
+                    X = box.PackedX + box.Width,
+                    Y = space.Y,
+                    Z = space.Z,
+                    Width = (space.X + space.Width) - (box.PackedX + box.Width),
+                    Length = space.Length,
+                    Height = space.Height
+                });
+            }
+            // Space to the left of the box
+            if (box.PackedX > space.X)
+            {
+                fragments.Add(new FreeSpace
+                {
+                    X = space.X,
+                    Y = space.Y,
+                    Z = space.Z,
+                    Width = box.PackedX - space.X,
+                    Length = space.Length,
+                    Height = space.Height
+                });
+            }
+            // Space in front of the box
+            if (box.PackedY + box.Length < space.Y + space.Length)
+            {
+                fragments.Add(new FreeSpace
+                {
+                    X = space.X,
+                    Y = box.PackedY + box.Length,
+                    Z = space.Z,
+                    Width = space.Width,
+                    Length = (space.Y + space.Length) - (box.PackedY + box.Length),
+                    Height = space.Height
+                });
+            }
+            // Space behind the box
+            if (box.PackedY > space.Y)
+            {
+                fragments.Add(new FreeSpace
+                {
+                    X = space.X,
+                    Y = space.Y,
+                    Z = space.Z,
+                    Width = space.Width,
+                    Length = box.PackedY - space.Y,
+                    Height = space.Height
+                });
+            }
+
+            return fragments;
+        }
+
+        /// <summary>
+        /// Optimizes spatial data by removing unusable shards and redundant geometry.
+        /// </summary>
+        /// <remarks>
+        /// Acts as a spatial garbage collector to prevent memory bloat and CPU slow-down. 
+        /// First, it removes physical spaces that are too small to hold standard padding (e.g., &lt; 100mm). 
+        /// Second, it eliminates "inscribed" spaces—where one generated FreeSpace is completely swallowed 
+        /// by the boundary of another overlapping FreeSpace.
+        /// </remarks>
+        /// <param name="spaces">The raw list of fragmented free spaces.</param>
+        /// <returns>A filtered list of optimized, distinct free spaces.</returns>
+        private static List<FreeSpace> CleanUpFreeSpaces(List<FreeSpace> spaces)
+        {
+            // 1. Remove impossible shards (Assuming 100mm is your smallest possible padding)
+            spaces.RemoveAll(s => s.Width < 100 || s.Length < 100 || s.Height < 100);
+
+            // 2. EMS Garbage Collection: Remove "Inscribed" spaces
+            // If Space A is completely swallowed by Space B, Space A is useless and slows down the computer.
+            List<FreeSpace> filteredSpaces = [];
+            for (int i = 0; i < spaces.Count; i++)
+            {
+                FreeSpace inner = spaces[i];
+                bool isInscribed = false;
+
+                for (int j = 0; j < spaces.Count; j++)
+                {
+                    if (i == j) continue;
+                    FreeSpace outer = spaces[j];
+
+                    if (inner.X >= outer.X &&
+                        inner.Y >= outer.Y &&
+                        inner.Z >= outer.Z &&
+                        inner.X + inner.Width <= outer.X + outer.Width &&
+                        inner.Y + inner.Length <= outer.Y + outer.Length &&
+                        inner.Z + inner.Height <= outer.Z + outer.Height)
+                    {
+                        isInscribed = true;
+                        break; // No need to check further, it's swallowed up
+                    }
+                }
+
+                if (!isInscribed)
+                {
+                    filteredSpaces.Add(inner);
+                }
+            }
+
+            return filteredSpaces;
+        }
+
+        /// <summary>
+        /// Validates structural integrity by ensuring sturdy cargo is not placed over fragile cargo.
+        /// </summary>
+        /// <remarks>
+        /// Casts a 2D downward raycast onto the X-Y floor plane. If the footprint of the new sturdy box 
+        /// overlaps with the footprint of any previously packed fragile box, it verifies the Z-axis height. 
+        /// If the sturdy box is positioned anywhere above the fragile box in that shared column, 
+        /// the placement is rejected to prevent crushing.
+        /// </remarks>
+        /// <param name="newBox">The box attempting to be placed.</param>
+        /// <param name="space">The candidate free space boundaries.</param>
+        /// <param name="allBoxes">The list of all boxes to check for existing packed fragile items.</param>
+        /// <returns>True if the placement violates no fragility constraints; otherwise, false.</returns>
+        private static bool IsPlacementSafe(CargoBox newBox, FreeSpace space, List<CargoBox> allBoxes)
+        {
+            // 1. Fragile boxes can be stacked anywhere, so they always pass.
+            if (newBox.IsFragile) return true;
+
+            // 2. If it's a sturdy box, find all the fragile boxes we have already packed
+            List<CargoBox> packedFragileBoxes = [.. allBoxes.Where(b => b.IsPacked && b.IsFragile)];
+
+            // 3. Calculate the boundaries of where this NEW box is trying to go
+            int newLeft = space.X;
+            int newRight = space.X + newBox.Width;
+            int newFront = space.Y;
+            int newBack = space.Y + newBox.Length;
+            int newBottom = space.Z;
+
+            // 4. Look underneath it
+            foreach (CargoBox? fragBox in packedFragileBoxes)
+            {
+                int fragLeft = fragBox.PackedX;
+                int fragRight = fragBox.PackedX + fragBox.Width;
+                int fragFront = fragBox.PackedY;
+                int fragBack = fragBox.PackedY + fragBox.Length;
+
+                // Check if their shadows overlap on the floor (X-Y Plane)
+                bool overlapX = newLeft < fragRight && newRight > fragLeft;
+                bool overlapY = newFront < fragBack && newBack > fragFront;
+
+                // If the shadows overlap AND the sturdy box is being placed higher than the fragile box...
+                if (overlapX && overlapY && newBottom >= fragBox.PackedZ)
+                {
+                    return false; // UNSAFE! The sturdy box would crush the fragile box.
+                }
+            }
+
+            return true; // The space is safe
         }
     }
 }

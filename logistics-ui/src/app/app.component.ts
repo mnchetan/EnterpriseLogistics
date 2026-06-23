@@ -84,17 +84,6 @@ export class AppComponent implements OnInit, AfterViewInit {
     animate();
   }
 
-  private drawTruckWireframe() {
-    const geometry = new THREE.BoxGeometry(this.TRUCK_W, this.TRUCK_H, this.TRUCK_L);
-    geometry.translate(this.TRUCK_W / 2, this.TRUCK_H / 2, this.TRUCK_L / 2);
-    
-    const edges = new THREE.EdgesGeometry(geometry);
-    const material = new THREE.LineBasicMaterial({ color: 0x00ff00, linewidth: 2, opacity: 0.3, transparent: true });
-    const truckWireframe = new THREE.LineSegments(edges, material);
-    
-    this.truckGroup.add(truckWireframe);
-  }
-
   public runAlgorithm(routeId: number) {
     this.logisticsService.calculatePacking(routeId).subscribe({
       next: (res) => {
@@ -201,5 +190,48 @@ export class AppComponent implements OnInit, AfterViewInit {
       },
       error: (err) => console.error('Failed to fetch existing plan', err)
     });
+  }
+
+  private drawTruckWireframe() {
+    // 1. Draw the standard green truck bounding box
+    const geometry = new THREE.BoxGeometry(this.TRUCK_W, this.TRUCK_H, this.TRUCK_L);
+    geometry.translate(this.TRUCK_W / 2, this.TRUCK_H / 2, this.TRUCK_L / 2);
+    
+    const edges = new THREE.EdgesGeometry(geometry);
+    const material = new THREE.LineBasicMaterial({ color: 0x00ff00, linewidth: 2, opacity: 0.3, transparent: true });
+    const truckWireframe = new THREE.LineSegments(edges, material);
+    
+    this.truckGroup.add(truckWireframe);
+
+    // 2. NEW: Draw the solid Floor (helps ground the 3D perspective)
+    const floorGeometry = new THREE.PlaneGeometry(this.TRUCK_W, this.TRUCK_L);
+    floorGeometry.rotateX(-Math.PI / 2); // Lay it flat
+    floorGeometry.translate(this.TRUCK_W / 2, 0, this.TRUCK_L / 2);
+    const floorMaterial = new THREE.MeshBasicMaterial({ color: 0x333333, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
+    const floorMesh = new THREE.Mesh(floorGeometry, floorMaterial);
+    
+    this.truckGroup.add(floorMesh);
+
+    // 3. NEW: Highlight the Loading Doors (Z = TRUCK_L)
+    const doorGeometry = new THREE.PlaneGeometry(this.TRUCK_W, this.TRUCK_H);
+    // Move it to the very back of the truck
+    doorGeometry.translate(this.TRUCK_W / 2, this.TRUCK_H / 2, this.TRUCK_L);
+    
+    // Create a tinted orange pane for the door
+    const doorMaterial = new THREE.MeshBasicMaterial({ 
+      color: 0xff8800, 
+      transparent: true, 
+      opacity: 0.15, 
+      side: THREE.DoubleSide 
+    });
+    const doorMesh = new THREE.Mesh(doorGeometry, doorMaterial);
+
+    // Add a glowing orange border to the door frame
+    const doorEdges = new THREE.EdgesGeometry(doorGeometry);
+    const doorEdgeMaterial = new THREE.LineBasicMaterial({ color: 0xffaa00, linewidth: 3 });
+    const doorWireframe = new THREE.LineSegments(doorEdges, doorEdgeMaterial);
+
+    this.truckGroup.add(doorMesh);
+    this.truckGroup.add(doorWireframe);
   }
 }

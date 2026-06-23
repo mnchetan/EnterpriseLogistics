@@ -321,109 +321,268 @@ POST /tinyWebApi/Post/ResetAllBoxesToUnpacked/NonQueryText
 
 ---
 
-# Packing Algorithm
+## 🧠 Packing Algorithm — 3D Empty Maximal Space (EMS) Engine
 
-## What Is It?
+### Overview
 
-The packing engine is a deterministic 3D Guillotine Split Space Partitioning algorithm.
+The load planning engine is built on a **deterministic 3D Empty Maximal Space (EMS) Partitioning algorithm** designed specifically for enterprise logistics and warehouse operations.
 
-A useful way to think about it is:
+Unlike traditional guillotine-based approaches that continuously fragment available volume into smaller regions, the EMS engine maintains a dynamic representation of the **largest available free spaces** within the vehicle. This enables higher packing density, better utilization of irregular gaps, and improved adaptability to operational constraints.
 
-> A warehouse-optimized version of 3D Tetris that follows real transportation and loading rules.
-
-Unlike generic packing algorithms, the engine understands:
-
-- Delivery sequence
-- Carton fragility
-- Load stability
-- Space optimization
+The engine combines mathematical optimization with real-world loading rules such as delivery sequencing, cargo fragility, weight distribution, and operator-defined manual placements.
 
 ---
 
-## Loading Strategy
+### Core Capabilities
+
+- Route-aware loading optimization
+- Empty Maximal Space (EMS) tracking
+- Dynamic space merging and cleanup
+- Heavy-base load stabilization
+- Fragility-aware placement validation
+- Manual placement preservation
+- Deterministic and repeatable results
+- Real-time 3D visualization support
+
+---
+
+## Operational Loading Strategy
+
+The packing process follows a series of warehouse-oriented rules that balance efficiency, safety, and operational practicality.
 
 | Rule | Purpose |
 |--------|---------|
-| LIFO Sorting | Delivery optimization |
-| Heavy First | Stable foundation |
-| Fragile Last | Damage prevention |
-| Lowest Z First | Structural support |
-| Back To Front | Efficient unloading |
-| Left To Right | Organized placement |
-| Guillotine Split | Space tracking |
-| Cleanup Pass | Performance optimization |
+| LIFO Sorting | Ensures cartons are loaded according to delivery sequence requirements. |
+| Heavy-Base Foundation | Places heavier cargo first to establish a stable structural base. |
+| Fragility Protection | Prevents heavy or rigid cartons from being positioned above fragile items. |
+| Manual Override Locking | Preserves operator-defined placements throughout optimization. |
+| EMS Space Merging | Reduces fragmentation and maximizes usable cargo volume. |
 
 ---
 
 ## Algorithm Workflow
 
-### Stage 1 — Shipment Optimization
+### Stage 1 — Operational Pre-Processing
 
-Before loading begins:
+Before automated packing begins, the system identifies cartons that have been manually positioned through the user interface.
 
-- Cargo is analyzed
-- Delivery sequence is evaluated
-- Heavy cartons are prioritized
-- Fragile cartons are deferred
+These cartons are treated as fixed obstacles and excluded from optimization calculations.
 
-### Stage 2 — Create Initial Free Space
+The truck volume is pre-partitioned around these locked placements, ensuring that automated packing respects operational decisions made by warehouse personnel.
 
-The truck is represented as one large empty volume.
+#### Objectives
+
+- Preserve operator intent
+- Support hybrid manual/automated workflows
+- Prevent coordinate overwrites
+- Enable incremental load planning
+
+---
+
+### Stage 2 — Shipment Optimization
+
+Remaining cartons are evaluated and sorted using a multi-factor prioritization model.
+
+#### Route Sequencing (LIFO)
+
+Cartons destined for later delivery stops are prioritized to ensure efficient unloading operations.
+
+#### Weight Prioritization
+
+Heavy cartons are loaded earlier to establish a stable load-bearing foundation.
+
+#### Fragility Prioritization
+
+Fragile cargo is intentionally deferred, naturally positioning it closer to the upper layers of the load.
+
+#### Benefits
+
+- Faster unloading
+- Improved load stability
+- Reduced cargo damage
+- More predictable loading behavior
+
+---
+
+### Stage 3 — EMS Search and Placement
+
+For each carton, the engine searches all currently available Empty Maximal Spaces and identifies the most suitable placement location.
+
+#### Spatial Search Priority
+
+Available spaces are evaluated using the following coordinate hierarchy:
+
+1. Lowest Z Coordinate (Floor First)
+2. Lowest Y Coordinate (Deepest Position)
+3. Lowest X Coordinate (Leftmost Position)
+
+This strategy naturally produces loading patterns that progress:
 
 ```text
-+----------------------+
-|                      |
-|     Empty Truck      |
-|                      |
-+----------------------+
+Bottom → Top
+Rear → Front
+Left → Right
 ```
 
-### Stage 3 — Find Best Position
+#### Safety Validation
 
-For every carton:
+Before finalizing a placement, the engine performs a vertical footprint analysis.
 
-1. Search all free spaces
-2. Evaluate fit
-3. Select optimal location
-4. Place carton
+If a non-fragile carton would occupy a position directly above a fragile carton, the candidate space is rejected and the search continues.
 
-Priority order:
+This validation mechanism acts as a virtual safety inspection layer within the optimization process.
 
-1. Lowest Z
-2. Lowest Y
-3. Lowest X
+---
 
-### Stage 4 — Guillotine Split
+### Stage 4 — EMS Partitioning and Space Consolidation
 
-After placement:
+After a carton is placed, the occupied volume is removed from the selected Empty Maximal Space.
+
+The remaining volume is partitioned using six-directional spatial subtraction.
+
+#### Generated Space Regions
+
+| Direction | Description |
+|------------|-------------|
+| Top | Space above the carton |
+| Bottom | Space below the carton |
+| Left | Space on the left side |
+| Right | Space on the right side |
+| Front | Space toward the vehicle doors |
+| Back | Space toward the vehicle bulkhead |
+
+The resulting candidate spaces are then evaluated and normalized.
+
+#### Space Consolidation
+
+To prevent excessive fragmentation, the engine performs a consolidation pass that:
+
+- Removes inscribed spaces
+- Eliminates redundant volumes
+- Merges adjacent compatible regions
+- Reconstructs larger Empty Maximal Spaces
+
+This process enables future cartons to utilize larger continuous volumes rather than being constrained by small fragmented gaps.
+
+---
+
+### Stage 5 — Cleanup and Persistence
+
+After all cartons have been evaluated, the engine performs final optimization cleanup.
+
+#### Tiny Space Removal
+
+Free-space fragments below the configured threshold are discarded.
+
+Typical threshold:
 
 ```text
-+----------------------+
-|      Space A         |
-+----------+-----------+
-| Carton   | Space B   |
-+----------+-----------+
-|      Space C         |
-+----------------------+
+100 mm
 ```
 
-The original volume is replaced with:
+These regions are considered operationally unusable and would only increase search complexity.
 
-- Top Space
-- Side Space
-- Front Space
+#### State Persistence
 
-### Stage 5 — Space Cleanup
+The finalized load plan is committed to the database, including:
 
-Unused fragments are removed.
+- Carton coordinates
+- Placement status
+- Route assignments
+- Packing metadata
 
-Examples:
+The persisted data is subsequently consumed by:
 
-- Narrow gaps
-- Tiny slivers
-- Non-usable volumes
+- The 3D visualization engine
+- Warehouse manifests
+- Operational dashboards
+- Reporting systems
 
-This improves both packing speed and placement quality.
+---
+
+## Technical Characteristics
+
+### Packing Model
+
+```text
+3D Empty Maximal Space (EMS)
+```
+
+### Space Management
+
+```text
+6-Way Spatial Subtraction
+```
+
+### Optimization Strategy
+
+```text
+Multi-Criteria Heuristic Sorting
+```
+
+Factors include:
+
+- Route Sequence
+- Weight
+- Fragility
+- Placement Constraints
+
+### Safety Mechanism
+
+```text
+Vertical Raycast-Based Fragility Validation
+```
+
+### Obstacle Handling
+
+```text
+Dynamic EMS Recalculation Around Locked Objects
+```
+
+### Execution Characteristics
+
+- Deterministic output
+- Repeatable packing plans
+- High packing density
+- Low computational overhead
+- Enterprise-scale workload support
+
+---
+
+## Key Advantages
+
+### Operational Efficiency
+
+- Route-aware loading plans
+- Reduced loading time
+- Faster unloading operations
+
+### Cargo Safety
+
+- Stable heavy-base construction
+- Fragility-aware placement validation
+- Reduced damage risk
+
+### Space Utilization
+
+- Large-space preservation through EMS merging
+- Reduced fragmentation
+- Higher truck utilization rates
+
+### Enterprise Readiness
+
+- Supports manual overrides
+- Database-backed persistence
+- Real-time visualization integration
+- Scalable architecture for large shipment volumes
+
+---
+
+## Summary
+
+The EMS engine combines advanced spatial optimization techniques with practical warehouse operating rules to produce loading plans that are both mathematically efficient and operationally executable.
+
+By continuously maintaining and consolidating Empty Maximal Spaces, validating fragility constraints, and respecting operator-defined placements, the system achieves high cargo density, load stability, and predictable execution in real-world logistics environments.
 
 ---
 

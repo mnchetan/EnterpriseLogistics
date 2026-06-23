@@ -93,6 +93,12 @@ namespace Logistics.Api.Infrastructure
                                 [PackedY] INT NULL,
                                 [PackedZ] INT NULL
                             );
+                          END
+                        -- 5. UPGRADE EXISTING SCHEMA (Add IsLocked if missing)
+                        IF COL_LENGTH('dbo.Boxes', 'IsLocked') IS NULL
+                        BEGIN
+                            ALTER TABLE [dbo].[Boxes] ADD [IsLocked] BIT NOT NULL DEFAULT 0;
+                            PRINT '[Provisioning] Upgraded schema: Added IsLocked column to Boxes table.';
                         END";
 
                 using (SqlCommand createTableCmd = new(createTablesSql, targetConn))
