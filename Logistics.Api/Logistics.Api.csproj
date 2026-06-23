@@ -1,0 +1,65 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Content Remove="C:\Users\Shreeji.DESKTOP-AJ296B3\.nuget\packages\tiny.webapi\10.0.9.10\contentFiles\any\net10.0\api.ico" />
+    <Content Remove="C:\Users\Shreeji.DESKTOP-AJ296B3\.nuget\packages\tiny.webapi\10.0.9.10\contentFiles\any\net10.0\connectionstring.Development.json" />
+    <Content Remove="C:\Users\Shreeji.DESKTOP-AJ296B3\.nuget\packages\tiny.webapi\10.0.9.10\contentFiles\any\net10.0\mailers.Development.json" />
+    <Content Remove="C:\Users\Shreeji.DESKTOP-AJ296B3\.nuget\packages\tiny.webapi\10.0.9.10\contentFiles\any\net10.0\queries.Development.json" />
+    <Content Remove="C:\Users\Shreeji.DESKTOP-AJ296B3\.nuget\packages\tiny.webapi\10.0.9.10\contentFiles\any\net10.0\users.Development.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="7.0.1" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.3" />
+    <PackageReference Include="tiny.WebApi" Version="10.0.9.10" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Update="Program.cs">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Compile>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Update="appsettings.Development.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Update="appsettings.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Update="appsettings.production.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Update="connectionstring.development.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Update="connectionstring.production.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Update="mailers.development.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Update="mailers.production.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Update="queries.development.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Update="queries.production.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Update="users.development.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Update="users.production.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+</Project>

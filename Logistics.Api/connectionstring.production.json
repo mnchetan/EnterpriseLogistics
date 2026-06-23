@@ -1,0 +1,20 @@
+﻿{
+  "LogisticsDb": {
+    "ConnectionString": "Data Source=(LocalDB)\\MSSQLLocalDB;Initial Catalog=LogisticsDB;Integrated Security=True;TrustServerCertificate=True;",
+    "IsEncrypted": false,
+    "IsImpersonationNeeded": false,
+    "RunAsUser": "",
+    "EncryptionKey": "",
+    "ConnectionTimeOut": 120,
+    "DatabaseType": "MSSQL",
+    "ActionNameOnlyForOracle": "",
+    "ModuleNameOnlyForOracle": "",
+    "ClientIdOnlyForOracle": "",
+    "PasswordReplacementParameter": "$password$",
+    "FullyQualifiedNameOfClassImplementingInterfaceIExecuteSourceSafeProcessing": "",
+    "ExternalDllNameImplementingIExecuteSourceSafeProcessing": "",
+    "ExternalDllPathImplementingIExecuteSourceSafeProcessing": "",
+    "IsRetrievePasswordFromSourceSafe": false,
+    "SourceSafeParameters": []
+  }
+}

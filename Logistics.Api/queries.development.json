@@ -1,0 +1,182 @@
+﻿{
+  "GetRoute": {
+    "DatabaseSpecificationName": "LogisticsDb",
+    "ExecutionType": "DataTableText",
+    "ExternalDllPathImplementingIProcessDataInterface_PostProcessing": "",
+    "ExternalDllPathImplementingIProcessDataInterface_PreProcessing": "",
+    "ExternalDllNameImplementingIProcessDataInterface_PostProcessing": "",
+    "ExternalDllNameImplementingIProcessDataInterface_PreProcessing": "",
+    "FullyQualifiedNameOfClassImplementingInterfaceIProcessDataInterface_PostProcessing": "",
+    "FullyQualifiedNameOfClassImplementingInterfaceIProcessDataInterface_PreProcessing": "",
+    "IsAllowUnloadOfExternalDllWhenDone": true,
+    "DatabaseInput": [
+      {
+        "InputFieldName": "",
+        "FullyQualifiedUDTTypeOptional": ""
+      }
+    ],
+    "IsAllowSendingJSONInMail": false,
+    "IsSendOutputViaEmailAlso": false,
+    "MailerSpecificationName": "",
+    "DatabaseOutput": [
+      {
+        "RefCursorName": "",
+        "IntegerFieldName": []
+      }
+    ],
+    "Query": "SELECT RouteId, TruckIdentifier, TruckLengthMm, TruckWidthMm, TruckHeightMm FROM dbo.Routes WHERE RouteId = @RouteId",
+    "IsCachingRequired": false,
+    "CacheDurationInSeconds": 0,
+    "SourceDestinationColumnMapping": []
+  },
+  "GetCargoForRoute": {
+    "DatabaseSpecificationName": "LogisticsDb",
+    "ExecutionType": "DataTableText",
+    "ExternalDllPathImplementingIProcessDataInterface_PostProcessing": "",
+    "ExternalDllPathImplementingIProcessDataInterface_PreProcessing": "",
+    "ExternalDllNameImplementingIProcessDataInterface_PostProcessing": "",
+    "ExternalDllNameImplementingIProcessDataInterface_PreProcessing": "",
+    "FullyQualifiedNameOfClassImplementingInterfaceIProcessDataInterface_PostProcessing": "",
+    "FullyQualifiedNameOfClassImplementingInterfaceIProcessDataInterface_PreProcessing": "",
+    "IsAllowUnloadOfExternalDllWhenDone": true,
+    "DatabaseInput": [
+      {
+        "InputFieldName": "",
+        "FullyQualifiedUDTTypeOptional": ""
+      }
+    ],
+    "IsAllowSendingJSONInMail": false,
+    "IsSendOutputViaEmailAlso": false,
+    "MailerSpecificationName": "",
+    "DatabaseOutput": [
+      {
+        "RefCursorName": "",
+        "IntegerFieldName": []
+      }
+    ],
+    "Query": "SELECT b.BoxId, b.LengthMm, b.WidthMm, b.HeightMm, b.WeightKg, b.IsFragile FROM dbo.Boxes b INNER JOIN dbo.Orders o ON b.OrderId = o.OrderId INNER JOIN dbo.Stops s ON o.StopId = s.StopId WHERE s.RouteId = @RouteId",
+    "IsCachingRequired": false,
+    "CacheDurationInSeconds": 0,
+    "SourceDestinationColumnMapping": []
+  },
+  "UpdateBoxCoordinates": {
+    "DatabaseSpecificationName": "LogisticsDb",
+    "ExecutionType": "NonQueryText",
+    "ExternalDllPathImplementingIProcessDataInterface_PostProcessing": "",
+    "ExternalDllPathImplementingIProcessDataInterface_PreProcessing": "",
+    "ExternalDllNameImplementingIProcessDataInterface_PostProcessing": "",
+    "ExternalDllNameImplementingIProcessDataInterface_PreProcessing": "",
+    "FullyQualifiedNameOfClassImplementingInterfaceIProcessDataInterface_PostProcessing": "",
+    "FullyQualifiedNameOfClassImplementingInterfaceIProcessDataInterface_PreProcessing": "",
+    "IsAllowUnloadOfExternalDllWhenDone": true,
+    "DatabaseInput": [
+      {
+        "InputFieldName": "",
+        "FullyQualifiedUDTTypeOptional": ""
+      }
+    ],
+    "IsAllowSendingJSONInMail": false,
+    "IsSendOutputViaEmailAlso": false,
+    "MailerSpecificationName": "",
+    "DatabaseOutput": [
+      {
+        "RefCursorName": "",
+        "IntegerFieldName": []
+      }
+    ],
+    "Query": "UPDATE dbo.Boxes SET IsPacked = 1, PackedX = @PackedX, PackedY = @PackedY, PackedZ = @PackedZ WHERE BoxId = @BoxId",
+    "IsCachingRequired": false,
+    "CacheDurationInSeconds": 0,
+    "SourceDestinationColumnMapping": []
+  },
+  "GetTruckDimensionsForRoute": {
+    "DatabaseSpecificationName": "LogisticsDb",
+    "ExecutionType": "DataTableText",
+    "ExternalDllPathImplementingIProcessDataInterface_PostProcessing": "",
+    "ExternalDllPathImplementingIProcessDataInterface_PreProcessing": "",
+    "ExternalDllNameImplementingIProcessDataInterface_PostProcessing": "",
+    "ExternalDllNameImplementingIProcessDataInterface_PreProcessing": "",
+    "FullyQualifiedNameOfClassImplementingInterfaceIProcessDataInterface_PostProcessing": "",
+    "FullyQualifiedNameOfClassImplementingInterfaceIProcessDataInterface_PreProcessing": "",
+    "IsAllowUnloadOfExternalDllWhenDone": true,
+    "DatabaseInput": [
+      {
+        "InputFieldName": "",
+        "FullyQualifiedUDTTypeOptional": ""
+      }
+    ],
+    "IsAllowSendingJSONInMail": false,
+    "IsSendOutputViaEmailAlso": false,
+    "MailerSpecificationName": "",
+    "DatabaseOutput": [
+      {
+        "RefCursorName": "",
+        "IntegerFieldName": []
+      }
+    ],
+    "Query": "SELECT TruckLengthMm, TruckWidthMm, TruckHeightMm FROM dbo.Routes WHERE RouteId = @RouteId",
+    "IsCachingRequired": false,
+    "CacheDurationInSeconds": 0,
+    "SourceDestinationColumnMapping": []
+  },
+  "GetUnpackedCargoForRoute": {
+    "DatabaseSpecificationName": "LogisticsDb",
+    "ExecutionType": "DataTableText",
+    "ExternalDllPathImplementingIProcessDataInterface_PostProcessing": "",
+    "ExternalDllPathImplementingIProcessDataInterface_PreProcessing": "",
+    "ExternalDllNameImplementingIProcessDataInterface_PostProcessing": "",
+    "ExternalDllNameImplementingIProcessDataInterface_PreProcessing": "",
+    "FullyQualifiedNameOfClassImplementingInterfaceIProcessDataInterface_PostProcessing": "",
+    "FullyQualifiedNameOfClassImplementingInterfaceIProcessDataInterface_PreProcessing": "",
+    "IsAllowUnloadOfExternalDllWhenDone": true,
+    "DatabaseInput": [
+      {
+        "InputFieldName": "",
+        "FullyQualifiedUDTTypeOptional": ""
+      }
+    ],
+    "IsAllowSendingJSONInMail": false,
+    "IsSendOutputViaEmailAlso": false,
+    "MailerSpecificationName": "",
+    "DatabaseOutput": [
+      {
+        "RefCursorName": "",
+        "IntegerFieldName": []
+      }
+    ],
+    "Query": "SELECT b.BoxId, s.SequenceNumber, b.LengthMm, b.WidthMm, b.HeightMm, b.WeightKg, b.IsFragile FROM dbo.Boxes b INNER JOIN dbo.Orders o ON b.OrderId = o.OrderId INNER JOIN dbo.Stops s ON o.StopId = s.StopId WHERE s.RouteId = @RouteId AND b.IsPacked = 0",
+    "IsCachingRequired": false,
+    "CacheDurationInSeconds": 0,
+    "SourceDestinationColumnMapping": []
+  },
+  "ResetAllBoxesToUnpacked": {
+    "DatabaseSpecificationName": "LogisticsDb",
+    "ExecutionType": "NonQueryText",
+    "ExternalDllPathImplementingIProcessDataInterface_PostProcessing": "",
+    "ExternalDllPathImplementingIProcessDataInterface_PreProcessing": "",
+    "ExternalDllNameImplementingIProcessDataInterface_PostProcessing": "",
+    "ExternalDllNameImplementingIProcessDataInterface_PreProcessing": "",
+    "FullyQualifiedNameOfClassImplementingInterfaceIProcessDataInterface_PostProcessing": "",
+    "FullyQualifiedNameOfClassImplementingInterfaceIProcessDataInterface_PreProcessing": "",
+    "IsAllowUnloadOfExternalDllWhenDone": true,
+    "DatabaseInput": [
+      {
+        "InputFieldName": "",
+        "FullyQualifiedUDTTypeOptional": ""
+      }
+    ],
+    "IsAllowSendingJSONInMail": false,
+    "IsSendOutputViaEmailAlso": false,
+    "MailerSpecificationName": "",
+    "DatabaseOutput": [
+      {
+        "RefCursorName": "",
+        "IntegerFieldName": []
+      }
+    ],
+    "Query": "UPDATE dbo.Boxes SET IsPacked = 0, PackedX = NULL, PackedY = NULL, PackedZ = NULL",
+    "IsCachingRequired": false,
+    "CacheDurationInSeconds": 0,
+    "SourceDestinationColumnMapping": []
+  }
+}

@@ -1,0 +1,35 @@
+﻿// <copyright file="mailers.dev.json" company="tiny">
+//   Copyright (c) 2021 tiny. All rights reserved.
+// </copyright>
+{
+  "somemailername1": {
+    "SMTP_SERVER": "smtp.server",
+    "SMTP_PORT": 1234,
+    "IsEncrypted": false,
+    "IsImpersonationNeeded": false,
+    "RunAsUser": "systemuser1",
+    "From": "noreply@noreply.com",
+    "To": "noreply@noreply.com",
+    "CC": "noreply@noreply.com",
+    "BCC": "noreply@noreply.com",
+    "Subject": "some subject",
+    "Body": "some body",
+    "AttachmentName": "some attachment name : DD-MMM-YYYY",
+    "IsBodyHtml": false
+  },
+  "somemailername2": {
+    "SMTP_SERVER": "smtp.server",
+    "SMTP_PORT": 1234,
+    "IsEncrypted": false,
+    "IsImpersonationNeeded": false,
+    "RunAsUser": "systemuser1",
+    "From": "noreply@noreply.com",
+    "To": "noreply@noreply.com",
+    "CC": "noreply@noreply.com",
+    "BCC": "noreply@noreply.com",
+    "Subject": "some subject",
+    "Body": "some body",
+    "AttachmentName": "some attachment name : DD-MMM-YYYY",
+    "IsBodyHtml": false
+  }
+}

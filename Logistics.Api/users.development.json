@@ -1,0 +1,39 @@
+﻿// <copyright file="users.dev.json" company="tiny">
+//   Copyright (c) 2021 tiny. All rights reserved.
+// </copyright>
+{
+  "systemuser1": {
+    "RunAsDomain": "domain",
+    "RunAsUserName": "username",
+    "RunAsPassword": "password",
+    "IsRunAsPasswordEncrypted": true,
+    "EncryptionKey": "some base 64 encryption key",
+    "FullyQualifiedNameOfClassImplementingInterfaceIExecuteSourceSafeProcessing": "",
+    "ExternalDllNameImplementingIExecuteSourceSafeProcessing": "",
+    "ExternalDllPathImplementingIExecuteSourceSafeProcessing": "",
+    "IsRetrievePasswordFromSourceSafe": false,
+    "SourceSafeParameters": [
+      {
+        "Name": "",
+        "Value": ""
+      }
+    ]
+  },
+  "systemuser2": {
+    "RunAsDomain": "domain",
+    "RunAsUserName": "username",
+    "RunAsPassword": "password",
+    "IsRunAsPasswordEncrypted": true,
+    "EncryptionKey": "some base 64 encryption key",
+    "FullyQualifiedNameOfClassImplementingInterfaceIExecuteSourceSafeProcessing": "",
+    "ExternalDllNameImplementingIExecuteSourceSafeProcessing": "",
+    "ExternalDllPathImplementingIExecuteSourceSafeProcessing": "",
+    "IsRetrievePasswordFromSourceSafe": false,
+    "SourceSafeParameters": [
+      {
+        "Name": "",
+        "Value": ""
+      }
+    ]
+  }
+}
