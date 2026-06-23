@@ -138,31 +138,112 @@ namespace Logistics.Api.Controllers
 
         private static void ExecutePackingAlgorithm(TruckSpace truck, List<CargoBox> boxes)
         {
+            // 1. Strict Sorting: 
+            // - Reverse Route Order (LIFO)
+            // - Heavy sturdy boxes first (form the base)
+            // - Fragile / light boxes last (go on top)
             List<CargoBox> sortedBoxes = [.. boxes
-                .OrderByDescending(b => b.StopSequence)
-                .ThenBy(b => b.IsFragile ? 1 : 0)
-                .ThenByDescending(b => b.Weight)];
+        .OrderByDescending(b => b.StopSequence)
+        .ThenBy(b => b.IsFragile ? 1 : 0)
+        .ThenByDescending(b => b.Weight)];
 
-            int currentX = 0, currentY = 0, currentZ = 0;
-            int currentRowMaxLength = 0;
+            // 2. Initialize the truck as one massive empty space
+            List<FreeSpace> availableSpaces =
+            [
+                new FreeSpace
+        {
+            X = 0, Y = 0, Z = 0,
+            Width = truck.Width,
+            Length = truck.Length,
+            Height = truck.Height
+        }
+            ];
 
             foreach (CargoBox box in sortedBoxes)
             {
-                if (currentX + box.Width > truck.Width)
+                // 3. Find the "Best" space for this box. 
+                // We sort spaces to always favor Bottom (Z), then Deepest (Y), then Left (X)
+                availableSpaces = [.. availableSpaces
+            .OrderBy(s => s.Z)
+            .ThenBy(s => s.Y)
+            .ThenBy(s => s.X)];
+
+                FreeSpace? bestSpace = null;
+                int spaceIndex = -1;
+
+                // Hunt for a space that can fully contain the box dimensions
+                for (int i = 0; i < availableSpaces.Count; i++)
                 {
-                    currentX = 0;
-                    currentY += currentRowMaxLength;
-                    currentRowMaxLength = 0;
+                    FreeSpace space = availableSpaces[i];
+                    if (box.Width <= space.Width && box.Length <= space.Length && box.Height <= space.Height)
+                    {
+                        bestSpace = space;
+                        spaceIndex = i;
+                        break;
+                    }
                 }
 
-                if (currentY + box.Length > truck.Length) continue;
+                if (bestSpace == null)
+                {
+                    Global.LogWarning($"[Algorithm Engine] BoxId {box.BoxId} cannot fit in the remaining free space.");
+                    box.IsPacked = false;
+                    continue;
+                }
 
-                box.PackedX = currentX;
-                box.PackedY = currentY;
-                box.PackedZ = currentZ;
+                // 4. Place the box in the bottom-left-back corner of the chosen space
+                box.PackedX = bestSpace.X;
+                box.PackedY = bestSpace.Y;
+                box.PackedZ = bestSpace.Z;
+                box.IsPacked = true;
 
-                currentX += box.Width;
-                if (box.Length > currentRowMaxLength) currentRowMaxLength = box.Length;
+                // 5. Guillotine Split the remaining space around the box
+                availableSpaces.RemoveAt(spaceIndex);
+
+                // Space A: Top of the box
+                if (bestSpace.Height - box.Height > 0)
+                {
+                    availableSpaces.Add(new FreeSpace
+                    {
+                        X = bestSpace.X,
+                        Y = bestSpace.Y,
+                        Z = bestSpace.Z + box.Height,
+                        Width = box.Width,
+                        Length = box.Length,
+                        Height = bestSpace.Height - box.Height
+                    });
+                }
+
+                // Space B: Right of the box
+                if (bestSpace.Width - box.Width > 0)
+                {
+                    availableSpaces.Add(new FreeSpace
+                    {
+                        X = bestSpace.X + box.Width,
+                        Y = bestSpace.Y,
+                        Z = bestSpace.Z,
+                        Width = bestSpace.Width - box.Width,
+                        Length = box.Length,
+                        Height = bestSpace.Height
+                    });
+                }
+
+                // Space C: Front of the box
+                if (bestSpace.Length - box.Length > 0)
+                {
+                    availableSpaces.Add(new FreeSpace
+                    {
+                        X = bestSpace.X,
+                        Y = bestSpace.Y + box.Length,
+                        Z = bestSpace.Z,
+                        Width = bestSpace.Width,
+                        Length = bestSpace.Length - box.Length,
+                        Height = bestSpace.Height
+                    });
+                }
+
+                // 6. Optimization: Clean up tiny unusable shards of space to save memory/CPU
+                // (Assuming anything smaller than 100mm on any side is unusable padding)
+                availableSpaces.RemoveAll(s => s.Width < 100 || s.Length < 100 || s.Height < 100);
             }
         }
     }

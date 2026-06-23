@@ -112,98 +112,143 @@ namespace Logistics.Api.Infrastructure
         {
             using SqlConnection conn = new(connectionString);
             conn.Open();
-            Console.WriteLine("[Provisioning] Running idempotent data seed...");
+            Console.WriteLine("[Provisioning] Running massive data seed to stress-test 3D Packing Algorithm...");
 
             string idempotentSeedSql = @"
             -- =================================================================
-            -- 1. TRUCK / ROUTE (Idempotent Insert)
+            -- VARIABLE DECLARATIONS (Done exactly once)
             -- =================================================================
             DECLARE @RouteId BIGINT;
-            
+            DECLARE @Stop1Id BIGINT, @Stop2Id BIGINT, @Stop3Id BIGINT;
+            DECLARE @Order1Id BIGINT, @Order2Id BIGINT, @Order3Id BIGINT;
+            DECLARE @Counter INT;
+
+            -- =================================================================
+            -- 1. TRUCK / ROUTE
+            -- =================================================================
             IF NOT EXISTS (SELECT 1 FROM dbo.Routes WHERE TruckIdentifier = 'TRK-001')
             BEGIN
                 INSERT INTO dbo.Routes (TruckIdentifier, TruckLengthMm, TruckWidthMm, TruckHeightMm) 
                 VALUES ('TRK-001', 5300, 2400, 2600);
                 SET @RouteId = SCOPE_IDENTITY();
             END
-            ELSE
-            BEGIN
-                SELECT @RouteId = RouteId FROM dbo.Routes WHERE TruckIdentifier = 'TRK-001';
-            END
+            ELSE BEGIN SELECT @RouteId = RouteId FROM dbo.Routes WHERE TruckIdentifier = 'TRK-001'; END
 
             -- =================================================================
-            -- 2. STOPS (Idempotent Insert)
+            -- 2. STOPS (3 Deliveries: Deepest, Middle, Doors)
             -- =================================================================
-            DECLARE @Stop1Id BIGINT, @Stop2Id BIGINT;
-
-            -- Stop 1
-            IF NOT EXISTS (SELECT 1 FROM dbo.Stops WHERE RouteId = @RouteId AND LocationName = 'Warehouse A')
+            -- Stop 1: Deepest in the truck (Sequence 1)
+            IF NOT EXISTS (SELECT 1 FROM dbo.Stops WHERE RouteId = @RouteId AND LocationName = 'Mega Warehouse (Deepest)')
             BEGIN
-                INSERT INTO dbo.Stops (RouteId, SequenceNumber, LocationName, IsPickup)
-                VALUES (@RouteId, 1, 'Warehouse A', 0);
+                INSERT INTO dbo.Stops (RouteId, SequenceNumber, LocationName, IsPickup) VALUES (@RouteId, 1, 'Mega Warehouse (Deepest)', 0);
                 SET @Stop1Id = SCOPE_IDENTITY();
             END
-            ELSE 
-            BEGIN 
-                SELECT @Stop1Id = StopId FROM dbo.Stops WHERE RouteId = @RouteId AND LocationName = 'Warehouse A'; 
-            END
+            ELSE BEGIN SELECT @Stop1Id = StopId FROM dbo.Stops WHERE RouteId = @RouteId AND LocationName = 'Mega Warehouse (Deepest)'; END
 
-            -- Stop 2
-            IF NOT EXISTS (SELECT 1 FROM dbo.Stops WHERE RouteId = @RouteId AND LocationName = 'Store B')
+            -- Stop 2: Middle of the truck (Sequence 2)
+            IF NOT EXISTS (SELECT 1 FROM dbo.Stops WHERE RouteId = @RouteId AND LocationName = 'Retail Outlet (Middle)')
             BEGIN
-                INSERT INTO dbo.Stops (RouteId, SequenceNumber, LocationName, IsPickup)
-                VALUES (@RouteId, 2, 'Store B', 0);
+                INSERT INTO dbo.Stops (RouteId, SequenceNumber, LocationName, IsPickup) VALUES (@RouteId, 2, 'Retail Outlet (Middle)', 0);
                 SET @Stop2Id = SCOPE_IDENTITY();
             END
-            ELSE 
-            BEGIN 
-                SELECT @Stop2Id = StopId FROM dbo.Stops WHERE RouteId = @RouteId AND LocationName = 'Store B'; 
-            END
+            ELSE BEGIN SELECT @Stop2Id = StopId FROM dbo.Stops WHERE RouteId = @RouteId AND LocationName = 'Retail Outlet (Middle)'; END
 
-            -- =================================================================
-            -- 3. ORDERS (Idempotent Insert)
-            -- =================================================================
-            DECLARE @Order1Id BIGINT, @Order2Id BIGINT;
-
-            -- Order 1
-            IF NOT EXISTS (SELECT 1 FROM dbo.Orders WHERE CustomerReference = 'ORD-001')
+            -- Stop 3: Near the doors (Sequence 3)
+            IF NOT EXISTS (SELECT 1 FROM dbo.Stops WHERE RouteId = @RouteId AND LocationName = 'Local Boutique (Doors)')
             BEGIN
-                INSERT INTO dbo.Orders (StopId, CustomerReference) VALUES (@Stop1Id, 'ORD-001');
+                INSERT INTO dbo.Stops (RouteId, SequenceNumber, LocationName, IsPickup) VALUES (@RouteId, 3, 'Local Boutique (Doors)', 0);
+                SET @Stop3Id = SCOPE_IDENTITY();
+            END
+            ELSE BEGIN SELECT @Stop3Id = StopId FROM dbo.Stops WHERE RouteId = @RouteId AND LocationName = 'Local Boutique (Doors)'; END
+
+            -- =================================================================
+            -- 3. ORDERS
+            -- =================================================================
+            IF NOT EXISTS (SELECT 1 FROM dbo.Orders WHERE CustomerReference = 'ORD-DEEP-01')
+            BEGIN
+                INSERT INTO dbo.Orders (StopId, CustomerReference) VALUES (@Stop1Id, 'ORD-DEEP-01');
                 SET @Order1Id = SCOPE_IDENTITY();
             END
-            ELSE BEGIN SELECT @Order1Id = OrderId FROM dbo.Orders WHERE CustomerReference = 'ORD-001'; END
+            ELSE BEGIN SELECT @Order1Id = OrderId FROM dbo.Orders WHERE CustomerReference = 'ORD-DEEP-01'; END
 
-            -- Order 2
-            IF NOT EXISTS (SELECT 1 FROM dbo.Orders WHERE CustomerReference = 'ORD-002')
+            IF NOT EXISTS (SELECT 1 FROM dbo.Orders WHERE CustomerReference = 'ORD-MID-02')
             BEGIN
-                INSERT INTO dbo.Orders (StopId, CustomerReference) VALUES (@Stop2Id, 'ORD-002');
+                INSERT INTO dbo.Orders (StopId, CustomerReference) VALUES (@Stop2Id, 'ORD-MID-02');
                 SET @Order2Id = SCOPE_IDENTITY();
             END
-            ELSE BEGIN SELECT @Order2Id = OrderId FROM dbo.Orders WHERE CustomerReference = 'ORD-002'; END
+            ELSE BEGIN SELECT @Order2Id = OrderId FROM dbo.Orders WHERE CustomerReference = 'ORD-MID-02'; END
+
+            IF NOT EXISTS (SELECT 1 FROM dbo.Orders WHERE CustomerReference = 'ORD-DOOR-03')
+            BEGIN
+                INSERT INTO dbo.Orders (StopId, CustomerReference) VALUES (@Stop3Id, 'ORD-DOOR-03');
+                SET @Order3Id = SCOPE_IDENTITY();
+            END
+            ELSE BEGIN SELECT @Order3Id = OrderId FROM dbo.Orders WHERE CustomerReference = 'ORD-DOOR-03'; END
 
             -- =================================================================
-            -- 4. BOXES (Idempotent Insert)
+            -- 4. MASSIVE BOX GENERATION
             -- =================================================================
-            -- For boxes, we check against their dimensions and order to prevent duplicates
+            -- Clear out old boxes first so we have a clean test
+            DELETE FROM dbo.Boxes WHERE OrderId IN (@Order1Id, @Order2Id, @Order3Id);
 
-            -- Boxes for Order 1 (Stop 1)
-            IF NOT EXISTS (SELECT 1 FROM dbo.Boxes WHERE OrderId = @Order1Id AND WeightKg = 15.0 AND IsFragile = 0)
+            -- -----------------------------------------------------------------
+            -- STOP 1: (Packed deep near the cab)
+            -- Creates 8 massive heavy pallets and 20 fragile top-boxes
+            -- -----------------------------------------------------------------
+            SET @Counter = 1;
+            WHILE @Counter <= 8
             BEGIN
                 INSERT INTO dbo.Boxes (OrderId, LengthMm, WidthMm, HeightMm, WeightKg, IsFragile, IsPacked) 
-                VALUES (@Order1Id, 600, 400, 400, 15.0, 0, 0);
+                VALUES (@Order1Id, 1200, 1000, 1100, 500.0, 0, 0); 
+                SET @Counter = @Counter + 1;
             END
 
-            IF NOT EXISTS (SELECT 1 FROM dbo.Boxes WHERE OrderId = @Order1Id AND WeightKg = 5.0 AND IsFragile = 1)
+            SET @Counter = 1;
+            WHILE @Counter <= 20
             BEGIN
                 INSERT INTO dbo.Boxes (OrderId, LengthMm, WidthMm, HeightMm, WeightKg, IsFragile, IsPacked) 
-                VALUES (@Order1Id, 600, 400, 400, 5.0, 1, 0);
+                VALUES (@Order1Id, 600, 400, 300, 5.0, 1, 0); 
+                SET @Counter = @Counter + 1;
             END
 
-            -- Box for Order 2 (Stop 2)
-            IF NOT EXISTS (SELECT 1 FROM dbo.Boxes WHERE OrderId = @Order2Id AND WeightKg = 50.0 AND IsFragile = 0)
+            -- -----------------------------------------------------------------
+            -- STOP 2: (Packed in the middle)
+            -- Creates 40 standard sturdy retail boxes and 30 medium fragile boxes
+            -- -----------------------------------------------------------------
+            SET @Counter = 1;
+            WHILE @Counter <= 40
             BEGIN
                 INSERT INTO dbo.Boxes (OrderId, LengthMm, WidthMm, HeightMm, WeightKg, IsFragile, IsPacked) 
-                VALUES (@Order2Id, 1200, 1000, 800, 50.0, 0, 0);
+                VALUES (@Order2Id, 500, 500, 500, 25.0, 0, 0); 
+                SET @Counter = @Counter + 1;
+            END
+
+            SET @Counter = 1;
+            WHILE @Counter <= 30
+            BEGIN
+                INSERT INTO dbo.Boxes (OrderId, LengthMm, WidthMm, HeightMm, WeightKg, IsFragile, IsPacked) 
+                VALUES (@Order2Id, 500, 500, 400, 10.0, 1, 0); 
+                SET @Counter = @Counter + 1;
+            END
+
+            -- -----------------------------------------------------------------
+            -- STOP 3: (Packed near the doors)
+            -- Creates 6 large appliances (sturdy) and 15 long awkward fragile items
+            -- -----------------------------------------------------------------
+            SET @Counter = 1;
+            WHILE @Counter <= 6
+            BEGIN
+                INSERT INTO dbo.Boxes (OrderId, LengthMm, WidthMm, HeightMm, WeightKg, IsFragile, IsPacked) 
+                VALUES (@Order3Id, 800, 800, 1500, 150.0, 0, 0); 
+                SET @Counter = @Counter + 1;
+            END
+
+            SET @Counter = 1;
+            WHILE @Counter <= 15
+            BEGIN
+                INSERT INTO dbo.Boxes (OrderId, LengthMm, WidthMm, HeightMm, WeightKg, IsFragile, IsPacked) 
+                VALUES (@Order3Id, 1200, 300, 200, 8.0, 1, 0); 
+                SET @Counter = @Counter + 1;
             END
         ";
 
@@ -211,7 +256,7 @@ namespace Logistics.Api.Infrastructure
             {
                 insertCmd.ExecuteNonQuery();
             }
-            Console.WriteLine("[Provisioning] Data seed validated. Database is ready.");
+            Console.WriteLine("[Provisioning] Successfully generated 119 boxes across 3 stops.");
         }
     }
 }

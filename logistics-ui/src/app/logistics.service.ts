@@ -10,6 +10,10 @@ export interface CargoBox {
   height: number;
   weight: number;
   isFragile: boolean;
+  
+  // Add this line to fix the TS2551 error!
+  isPacked: boolean; 
+  
   packedX: number;
   packedY: number;
   packedZ: number;
