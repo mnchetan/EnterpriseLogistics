@@ -33,7 +33,8 @@ namespace Logistics.Api.Controllers
         {
             Global.LogInformation($"[Algorithm Engine] Initialization started for RouteId: {routeId}");
 
-            TruckSpace truck = new();
+            // 1. THIS IS THE FIX: Change TruckSpace to Truck
+            Truck truck = new();
             List<CargoBox> unpackedBoxes = [];
 
             try
@@ -150,7 +151,7 @@ namespace Logistics.Api.Controllers
         /// </remarks>
         /// <param name="truck">The dimensions of the container or truck.</param>
         /// <param name="allBoxes">The complete list of boxes, including both locked and unpacked items.</param>
-        private static void ExecuteSmartPackingAlgorithm(TruckSpace truck, List<CargoBox> allBoxes)
+        private static void ExecuteSmartPackingAlgorithm(Truck truck, List<CargoBox> allBoxes)
         {
             // 1. Initialize the truck as one massive empty space
             List<FreeSpace> availableSpaces = [
@@ -173,7 +174,7 @@ namespace Logistics.Api.Controllers
             // 3. PACKING PASS: Pack the remaining boxes
             List<CargoBox> unpackedBoxes = [.. allBoxes.Where(b => !b.IsLocked)
                 .OrderByDescending(b => b.StopSequence)
-                .ThenBy(b => b.IsFragile ? 1 : 0)
+                .ThenBy(b => b.IsFragile ? 0 : 1)
                 .ThenByDescending(b => b.Weight)];
 
             foreach (CargoBox box in unpackedBoxes)
@@ -196,7 +197,29 @@ namespace Logistics.Api.Controllers
                         }
                     }
                 }
+                FreeSpace? largestSpace = availableSpaces
+    .OrderByDescending(s =>
+        (long)s.Width * s.Length * s.Height)
+    .FirstOrDefault();
 
+                Global.LogInformation(
+                    $"Box={box.BoxId} Fragile={box.IsFragile} " +
+                    $"LargestSpace={largestSpace?.Width}x" +
+                    $"{largestSpace?.Length}x" +
+                    $"{largestSpace?.Height}");
+                if (box.IsFragile)
+                {
+                    Console.WriteLine(
+                        $"Fragile Box={box.BoxId} " +
+                        $"Spaces={availableSpaces.Count}");
+                }
+                if (bestSpace == null)
+                {
+                    Console.WriteLine(
+                        $"FAILED Fragile={box.IsFragile} " +
+                        $"Box={box.BoxId} " +
+                        $"Size={box.Width}x{box.Length}x{box.Height}");
+                }
                 if (bestSpace == null)
                 {
                     Global.LogWarning($"[Algorithm Engine] BoxId {box.BoxId} cannot fit or violates fragility rules.");
@@ -397,7 +420,10 @@ namespace Logistics.Api.Controllers
         private static bool IsPlacementSafe(CargoBox newBox, FreeSpace space, List<CargoBox> allBoxes)
         {
             // 1. Fragile boxes can be stacked anywhere, so they always pass.
-            if (newBox.IsFragile) return true;
+            if (newBox.IsFragile)
+            {
+                return true;
+            }
 
             // 2. If it's a sturdy box, find all the fragile boxes we have already packed
             List<CargoBox> packedFragileBoxes = [.. allBoxes.Where(b => b.IsPacked && b.IsFragile)];
@@ -429,6 +455,162 @@ namespace Logistics.Api.Controllers
             }
 
             return true; // The space is safe
+        }
+
+        private static void DispatchCargoToTrucks(List<CargoBox> allCargo, List<Truck> trucks)
+        {
+            // 1. Sort cargo by weight (Largest first) to maximize space usage
+            List<CargoBox> sortedCargo = [.. allCargo.OrderByDescending(c => c.Weight)];
+
+            foreach (CargoBox box in sortedCargo)
+            {
+                Console.WriteLine(
+    $"BOX={box.BoxId} " +
+    $"Fragile={box.IsFragile} " +
+    $"Route={box.StartPoint}-{box.EndPoint}");
+                // 2. Identify available trucks for this specific box
+                // A truck can take the box if:
+                // (CurrentLoad + box.Weight <= 2000kg) AND (The box route fits within the truck's route)
+                List<Truck> viableTrucks = [.. trucks.Where(t =>
+                    (t.CurrentLoad + box.Weight <= 2000) &&
+                    (box.StartPoint >= t.RouteStart && box.EndPoint <= t.RouteEnd)
+                ).OrderByDescending(t => t.RemainingCapacity)];
+                Console.WriteLine(
+    $"BOX={box.BoxId} " +
+    $"Fragile={box.IsFragile} " +
+    $"Viable={viableTrucks.Count}");
+                if (viableTrucks.Count != 0)
+                {
+                    Truck bestTruck = viableTrucks.First(); // Pick the one with most room
+                    bestTruck.Boxes.Add(box);
+                    bestTruck.CurrentLoad += box.Weight;
+                }
+                else
+                {
+                    Global.LogWarning($"[Dispatcher] Box {box.BoxId} cannot be delivered: No viable truck.");
+                    box.IsPacked = false;
+                }
+            }
+        }
+
+        [HttpPost("[controller]/dispatch")]
+        public IActionResult DispatchMultipleTrucks()
+        {
+            // 1. Load data for two trucks
+            List<Truck> fleet = [
+                new Truck { Id = "TruckA", RouteStart = 1, RouteEnd = 10, Capacity = 2000, Width = 2400, Length = 5300, Height = 2600 },
+                new Truck { Id = "TruckB", RouteStart = 5, RouteEnd = 15, Capacity = 2000, Width = 2400, Length = 5300, Height = 2600 }
+            ];
+
+            // 2. Clear out the previous run's coordinates
+            QuerySpecification resetSpec = Global.GetQuerySpecificationByQueryName("ResetAllBoxesToUnpacked");
+            DataBaseManagerSql dbManager = new(sqlContext, resetSpec, false);
+            dbManager.ExecNonQuery(resetSpec, []);
+
+            List<CargoBox> allCargo = FetchAllPendingCargo();
+
+            // 3. Run Knapsack Dispatcher
+            DispatchCargoToTrucks(allCargo, fleet);
+            sqlContext.GetConnection(resetSpec.DatabaseSpecification.ConnectionString, true);
+            dbManager = new(sqlContext, resetSpec, false);
+            // 4. Run 3D Packing AND Save to Database
+
+
+            dbManager.BeginTransaction();
+            try
+            {
+                QuerySpecification updateSpec = Global.GetQuerySpecificationByQueryName("UpdateBoxCoordinates");
+
+                foreach (Truck truck in fleet)
+                {
+                    Console.WriteLine(
+    $"Truck={truck.Id} " +
+    $"Total={truck.Boxes.Count} " +
+    $"Fragile={truck.Boxes.Count(x => x.IsFragile)}");
+                    ExecuteSmartPackingAlgorithm(truck, truck.Boxes);
+                    foreach (CargoBox? b in truck.Boxes.Where(x => x.IsFragile))
+                    {
+                        Console.WriteLine(
+                            $"FRAGILE {b.BoxId} Packed={b.IsPacked} " +
+                            $"({b.PackedX},{b.PackedY},{b.PackedZ})");
+                    }
+
+                    foreach (CargoBox box in truck.Boxes)
+                    {
+                        if (box.IsPacked)
+                        {
+                            List<DatabaseParameters> updateParams = [
+                                new DatabaseParameters { Name = "PackedX", Value = box.PackedX },
+                                new DatabaseParameters { Name = "PackedY", Value = box.PackedY },
+                                new DatabaseParameters { Name = "PackedZ", Value = box.PackedZ },
+                                new DatabaseParameters { Name = "BoxId", Value = box.BoxId }
+                            ];
+                            dbManager.ExecNonQuery(updateSpec, updateParams);
+                        }
+                    }
+                    Console.WriteLine(
+    $"Packed Fragile=" +
+    truck.Boxes.Count(x => x.IsFragile && x.IsPacked));
+                }
+                dbManager.Commit();
+            }
+            catch (Exception ex)
+            {
+                dbManager.Rollback();
+                Global.LogError("[Algorithm Engine] Fleet Dispatch Save Failed.", ex);
+                throw;
+            }
+
+            // NEW: After the trucks are packed, find all boxes that were left behind
+            // (Either because of weight limits, route mismatch, or physical 3D space rejection)
+            List<CargoBox> leftBehindCargo = allCargo.Where(b => !b.IsPacked).ToList();
+            foreach (CargoBox? box in allCargo.Where(x => x.IsFragile).Take(20))
+            {
+                Console.WriteLine(
+                    $"Fragile Box={box.BoxId} " +
+                    $"Start={box.StartPoint} " +
+                    $"End={box.EndPoint}");
+            }
+            return Ok(new { fleetStatus = fleet, unassignedBoxes = leftBehindCargo });
+        }
+
+        private List<CargoBox> FetchAllPendingCargo()
+        {
+            QuerySpecification cargoSpec = Global.GetQuerySpecificationByQueryName("GetAllPendingCargo");
+            using DataBaseManagerSql dbManager = new(sqlContext, cargoSpec, false);
+
+            DataTable dt = dbManager.ExecDataTable(cargoSpec, []);
+            List<CargoBox> cargoList = [];
+
+            foreach (DataRow row in dt.Rows)
+            {
+                cargoList.Add(new CargoBox
+                {
+                    BoxId = Convert.ToInt64(row["BoxId"]),
+
+                    // Fields from Orders Table
+                    StartPoint = row["StartPoint"] != DBNull.Value ? Convert.ToInt32(row["StartPoint"]) : 1,
+                    EndPoint = row["EndPoint"] != DBNull.Value ? Convert.ToInt32(row["EndPoint"]) : 10,
+
+                    // Fields from Stops Table
+                    StopSequence = row["SequenceNumber"] != DBNull.Value ? Convert.ToInt32(row["SequenceNumber"]) : 1,
+
+                    // Fields from Boxes Table
+                    Weight = Convert.ToDecimal(row["WeightKg"]),
+                    Height = Convert.ToInt32(row["HeightMm"]),
+                    Width = Convert.ToInt32(row["WidthMm"]),
+                    Length = Convert.ToInt32(row["LengthMm"]),
+                    // Change this line in FetchAllPendingCargo:
+                    IsFragile = row["IsFragile"] != DBNull.Value && (Convert.ToBoolean(row["IsFragile"]) || row["IsFragile"].ToString() == "1"),
+                    IsLocked = row["IsLocked"] != DBNull.Value && Convert.ToBoolean(row["IsLocked"]),
+                    IsPacked = row["IsPacked"] != DBNull.Value && Convert.ToBoolean(row["IsPacked"]),
+
+                    PackedX = row["PackedX"] != DBNull.Value ? Convert.ToInt32(row["PackedX"]) : 0,
+                    PackedY = row["PackedY"] != DBNull.Value ? Convert.ToInt32(row["PackedY"]) : 0,
+                    PackedZ = row["PackedZ"] != DBNull.Value ? Convert.ToInt32(row["PackedZ"]) : 0
+                });
+            }
+            return cargoList;
         }
     }
 }

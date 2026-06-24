@@ -52,4 +52,9 @@ export class LogisticsService {
     };
     return this.http.post(`http://localhost:5059/tinyWebApi/Post/UpdateBoxCoordinates/NonQueryText`, payload);
   }
+  // NEW: Multi-truck dispatch endpoint
+  public dispatchFleet(): Observable<any> {
+    // Note: Assuming your new C# dispatch controller method maps to /Algorithm/dispatch
+    return this.http.post<any>(`http://localhost:5059/Algorithm/dispatch`, {});
+  }
 }

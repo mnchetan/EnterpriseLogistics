@@ -4,25 +4,34 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { DragControls } from 'three/examples/jsm/controls/DragControls';
 import { LogisticsService, CargoBox } from './logistics.service';
 
+// 1. We isolate the 3D state so each truck has its own independent universe
+export interface TruckViewport {
+  id: string;
+  remainingCapacity: number;
+  packedBoxes: CargoBox[];
+  scene: THREE.Scene;
+  camera: THREE.PerspectiveCamera;
+  renderer: THREE.WebGLRenderer;
+  truckGroup: THREE.Group;
+  cargoGroup: THREE.Group; // <--- NEW
+  orbitControls: OrbitControls;
+  dragControls?: DragControls;
+  draggableMeshes: THREE.Mesh[];
+}
+
 @Component({
   selector: 'app-root',
-  templateUrl: 'app.component.html',
-  styleUrls: ['app.component.css']
+  templateUrl: './app.component.html',
+  styleUrls: ['./app.component.css']
 })
 export class AppComponent implements OnInit, AfterViewInit {
-  @ViewChild('rendererContainer', { static: true }) rendererContainer!: ElementRef;
-  
-  public packedBoxes: CargoBox[] = [];
+  @ViewChild('rendererContainerA') containerA!: ElementRef;
+  @ViewChild('rendererContainerB') containerB!: ElementRef;
 
-  private scene!: THREE.Scene;
-  private camera!: THREE.PerspectiveCamera;
-  private renderer!: THREE.WebGLRenderer;
-  private truckGroup = new THREE.Group();
-  
-  // NEW: Control variables
-  private orbitControls!: OrbitControls;
-  private dragControls!: DragControls;
-  private draggableMeshes: THREE.Mesh[] = [];
+  // 2. Initialize the state for both trucks
+  public truckA = this.createEmptyViewport('TruckA');
+  public truckB = this.createEmptyViewport('TruckB');
+  public unassignedBoxes: CargoBox[] = [];
 
   private TRUCK_L = 5300;
   private TRUCK_W = 2400;
@@ -30,81 +39,144 @@ export class AppComponent implements OnInit, AfterViewInit {
 
   constructor(
     private logisticsService: LogisticsService,
-    private cdr: ChangeDetectorRef // <-- ADD THIS
-  ) {}
+    private cdr: ChangeDetectorRef
+  ) { }
 
-  ngOnInit(): void {}
+  ngOnInit(): void { }
 
-  ngAfterViewInit(): void {
-    this.init3DScene();
-    
+  ngAfterViewInit() {
+    // 3. Boot up both 3D environments, passing the specific container and state object
+    this.init3DScene(this.containerA, this.truckA);
+    this.init3DScene(this.containerB, this.truckB);
+
+    // 4. Properly scoped resize listener for both canvases
     window.addEventListener('resize', () => {
-      const container = this.rendererContainer.nativeElement;
-      this.camera.aspect = container.clientWidth / container.clientHeight;
-      this.camera.updateProjectionMatrix();
-      this.renderer.setSize(container.clientWidth, container.clientHeight);
+      this.resizeCanvas(this.containerA, this.truckA);
+      this.resizeCanvas(this.containerB, this.truckB);
     });
   }
 
-  private init3DScene() {
-    const container = this.rendererContainer.nativeElement;
+  private createEmptyViewport(identifier: string): TruckViewport {
+    return {
+      id: identifier,
+      remainingCapacity: 2000,
+      packedBoxes: [],
+      scene: new THREE.Scene(),
+      camera: new THREE.PerspectiveCamera(),
+      renderer: new THREE.WebGLRenderer({ antialias: true }),
+      truckGroup: new THREE.Group(),
+      cargoGroup: new THREE.Group(),
+      orbitControls: null as any,
+      draggableMeshes: []
+    };
+  }
 
-    this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color('#1e1e1e');
-    
-    this.camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 1, 20000);
-    this.camera.position.set(this.TRUCK_W * 1.8, this.TRUCK_H * 1.5, this.TRUCK_L * 1.5);
-    this.camera.lookAt(this.TRUCK_W / 2, this.TRUCK_H / 2, this.TRUCK_L / 2);
+  private resizeCanvas(containerRef: ElementRef, state: TruckViewport) {
+    const container = containerRef.nativeElement;
+    state.camera.aspect = container.clientWidth / container.clientHeight;
+    state.camera.updateProjectionMatrix();
+    state.renderer.setSize(container.clientWidth, container.clientHeight);
+  }
 
-    this.renderer = new THREE.WebGLRenderer({ antialias: true });
-    this.renderer.setSize(container.clientWidth, container.clientHeight);
-    container.appendChild(this.renderer.domElement);
+  private init3DScene(containerRef: ElementRef, state: TruckViewport) {
+    const container = containerRef.nativeElement; // Correctly use the passed reference
 
-    // NEW: Initialize Orbit Controls for 360 viewing
-    this.orbitControls = new OrbitControls(this.camera, this.renderer.domElement);
-    // Set the target to the center of the truck so it orbits perfectly around it
-    this.orbitControls.target.set(this.TRUCK_W / 2, this.TRUCK_H / 2, this.TRUCK_L / 2);
-    this.orbitControls.update();
+    state.scene.background = new THREE.Color('#1e1e1e');
+
+    state.camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 1, 20000);
+    state.camera.position.set(this.TRUCK_W * 1.8, this.TRUCK_H * 1.5, this.TRUCK_L * 1.5);
+    state.camera.lookAt(this.TRUCK_W / 2, this.TRUCK_H / 2, this.TRUCK_L / 2);
+
+    state.renderer.setSize(container.clientWidth, container.clientHeight);
+    container.appendChild(state.renderer.domElement);
+
+    state.orbitControls = new OrbitControls(state.camera, state.renderer.domElement);
+    state.orbitControls.target.set(this.TRUCK_W / 2, this.TRUCK_H / 2, this.TRUCK_L / 2);
+    state.orbitControls.update();
 
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
-    this.scene.add(ambientLight);
+    state.scene.add(ambientLight);
+
     const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
     dirLight.position.set(5000, 5000, 5000);
-    this.scene.add(dirLight);
+    state.scene.add(dirLight);
 
-    this.drawTruckWireframe();
-    this.scene.add(this.truckGroup);
+    this.drawTruckWireframe(state.truckGroup);
+    state.scene.add(state.truckGroup);
+    state.scene.add(state.cargoGroup); // <--- NEW: Add the cargo group to the scene
 
     const animate = () => {
       requestAnimationFrame(animate);
-      // OrbitControls requires an update call in the animation loop if damping/auto-rotate is enabled
-      this.orbitControls.update(); 
-      this.renderer.render(this.scene, this.camera);
+      state.orbitControls.update();
+      state.renderer.render(state.scene, state.camera);
     };
     animate();
   }
 
-  public runAlgorithm(routeId: number) {
-    this.logisticsService.calculatePacking(routeId).subscribe({
-      next: (res) => {
-        this.packedBoxes = res.packedBoxes;
-        this.renderBoxes(res.packedBoxes);
+  public runAlgorithm() {
+    this.logisticsService.dispatchFleet().subscribe({
+      next: (res: any) => {
+        // Safe mapper to handle C# PascalCase to JS camelCase
+        const mapBoxes = (boxes: any[]) => boxes.map(b => ({
+          boxId: b.boxId ?? b.BoxId,
+          stopSequence: b.stopSequence ?? b.StopSequence,
+          length: b.length ?? b.Length,
+          width: b.width ?? b.Width,
+          height: b.height ?? b.Height,
+          weight: b.weight ?? b.Weight,
+          isFragile: b.isFragile ?? b.IsFragile ?? false,
+          isPacked: b.isPacked ?? b.IsPacked ?? false,
+          packedX: b.packedX ?? b.PackedX ?? 0,
+          packedY: b.packedY ?? b.PackedY ?? 0,
+          packedZ: b.packedZ ?? b.PackedZ ?? 0
+        }));
+
+        // Process Truck A
+        const truckAData = res.fleetStatus.find((t: any) => t.id === 'TruckA' || t.Id === 'TruckA');
+        if (truckAData) {
+          this.truckA.packedBoxes = mapBoxes(truckAData.boxes || truckAData.Boxes);
+          this.truckA.remainingCapacity = 2000 - (truckAData.currentLoad || truckAData.CurrentLoad);
+          this.renderBoxes(this.truckA);
+        }
+
+        // Process Truck B
+        const truckBData = res.fleetStatus.find((t: any) => t.id === 'TruckB' || t.Id === 'TruckB');
+        if (truckBData) {
+          this.truckB.packedBoxes = mapBoxes(truckBData.boxes || truckBData.Boxes);
+          this.truckB.remainingCapacity = 2000 - (truckBData.currentLoad || truckBData.CurrentLoad);
+          this.renderBoxes(this.truckB);
+        }
+
+        // Process Unassigned/Rejected Boxes
+        if (res.unassignedBoxes) {
+          this.unassignedBoxes = mapBoxes(res.unassignedBoxes);
+        }
+
+        // FORCE Angular to update the HTML Grid
+        this.cdr.detectChanges(); 
       },
-      error: (err) => console.error('Failed to run packing algorithm', err)
+      error: (err: any) => console.error('Failed to dispatch fleet algorithm', err)
     });
   }
 
-  private renderBoxes(boxes: CargoBox[]) {
-    // 1. Cleanup old boxes and controls
-    const toRemove = this.truckGroup.children.filter(c => c.type === 'Mesh' || c.type === 'Group');
-    toRemove.forEach(mesh => this.truckGroup.remove(mesh));
-    this.draggableMeshes = [];
-    if (this.dragControls) {
-      this.dragControls.dispose();
-    }
+  get packedBoxes(): CargoBox[] {
+    return [...this.truckA.packedBoxes, ...this.truckB.packedBoxes, ...this.unassignedBoxes];
+  }
 
-    // 2. Build new boxes
-    boxes.forEach(box => {
+  private renderBoxes(state: TruckViewport) {
+    // 1. Clear existing cargo without destroying the TruckWireframe or Floor
+    state.cargoGroup.clear();
+    
+    // 2. Dispose of old controls to prevent memory leaks/zombie events
+    if (state.dragControls) {
+      state.dragControls.dispose();
+    }
+    state.draggableMeshes = [];
+
+    // 3. Render Boxes
+    state.packedBoxes.forEach(box => {
+      // If the API returns isPacked=false, we MUST NOT attempt to render them
+      // at (0,0,0) as that will make them overlap with the front of the truck
       if (!box.isPacked) return;
 
       const color = box.isFragile ? 0xff4444 : 0x4444ff;
@@ -112,66 +184,88 @@ export class AppComponent implements OnInit, AfterViewInit {
       const material = new THREE.MeshLambertMaterial({ color: color, transparent: true, opacity: 0.85 });
       const mesh = new THREE.Mesh(geometry, material);
 
-      const centerX = box.packedX + (box.width / 2);
-      const centerY = box.packedZ + (box.height / 2); 
-      const centerZ = box.packedY + (box.length / 2); 
+      // Map algorithm coordinates to Three.js coordinates
+      // X = Width, Y = Height (Z in algo), Z = Length (Y in algo)
+      mesh.position.set(
+        box.packedX + (box.width / 2),
+        box.packedZ + (box.height / 2),
+        box.packedY + (box.length / 2)
+      );
 
-      mesh.position.set(centerX, centerY, centerZ);
-      
-      // Store reference to the original box data in the mesh's user data
       mesh.userData = { originalBox: box };
+      mesh.add(new THREE.LineSegments(
+        new THREE.EdgesGeometry(geometry),
+        new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.3 })
+      ));
 
-      const edges = new THREE.EdgesGeometry(geometry);
-      const edgeLine = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.3 }));
-      mesh.add(edgeLine);
-
-      this.truckGroup.add(mesh);
-      this.draggableMeshes.push(mesh); // Add to our drag array
+      state.cargoGroup.add(mesh);
+      state.draggableMeshes.push(mesh);
     });
 
-    // 3. Initialize Drag Controls
-    this.dragControls = new DragControls(this.draggableMeshes, this.camera, this.renderer.domElement);
-
-    // Disable camera orbit when user clicks a box to drag it
-    this.dragControls.addEventListener('dragstart', (event) => {
-      this.orbitControls.enabled = false;
-      
-      // 1. Cast the generic Object3D to a Mesh first
-      const mesh = event.object as THREE.Mesh;
-      
-      // 2. Safely modify the material opacity
-      (mesh.material as THREE.Material).opacity = 0.5;
+    // 4. Re-bind DragControls to the specific renderer and camera of this TruckViewport
+    state.dragControls = new DragControls(state.draggableMeshes, state.camera, state.renderer.domElement);
+    
+    state.dragControls.addEventListener('dragstart', (event) => {
+      state.orbitControls.enabled = false;
+      (event.object as THREE.Mesh).material = new THREE.MeshLambertMaterial({ color: 0xffff00, opacity: 0.5, transparent: true });
     });
 
-    // Re-enable camera orbit when user lets go
-    this.dragControls.addEventListener('dragend', (event) => {
-      this.orbitControls.enabled = true;
-      
+    state.dragControls.addEventListener('dragend', (event) => {
+      state.orbitControls.enabled = true;
       const mesh = event.object as THREE.Mesh;
-      (mesh.material as THREE.Material).opacity = 0.85;
-
       const boxData = mesh.userData['originalBox'] as CargoBox;
-      
+
+      // Map back to algorithm space
       boxData.packedX = Math.round(mesh.position.x - (boxData.width / 2));
       boxData.packedZ = Math.round(mesh.position.y - (boxData.height / 2));
       boxData.packedY = Math.round(mesh.position.z - (boxData.length / 2));
-      
-      // 1. Manually trigger Angular to update the HTML table
-      this.cdr.detectChanges(); 
 
-      // 2. FIRE THE API CALL TO SAVE THE OVERRIDE TO SQL SERVER!
-      this.logisticsService.updateBoxCoordinates(boxData).subscribe({
-        next: () => console.log(`[DB SUCCESS] Box ${boxData.boxId} saved to DB.`),
-        error: (err) => console.error(`[DB ERROR] Failed to save Box ${boxData.boxId}`, err)
-      });
+      this.logisticsService.updateBoxCoordinates(boxData).subscribe();
     });
   }
 
-  public fetchCurrentPlan(routeId: number) {
-    this.logisticsService.loadExistingPlan(routeId).subscribe({
+  private drawTruckWireframe(group: THREE.Group) {
+    const geometry = new THREE.BoxGeometry(this.TRUCK_W, this.TRUCK_H, this.TRUCK_L);
+    geometry.translate(this.TRUCK_W / 2, this.TRUCK_H / 2, this.TRUCK_L / 2);
+
+    const edges = new THREE.EdgesGeometry(geometry);
+    const material = new THREE.LineBasicMaterial({ color: 0x00ff00, linewidth: 2, opacity: 0.3, transparent: true });
+    const truckWireframe = new THREE.LineSegments(edges, material);
+
+    group.add(truckWireframe);
+
+    const floorGeometry = new THREE.PlaneGeometry(this.TRUCK_W, this.TRUCK_L);
+    floorGeometry.rotateX(-Math.PI / 2);
+    floorGeometry.translate(this.TRUCK_W / 2, 0, this.TRUCK_L / 2);
+    const floorMaterial = new THREE.MeshBasicMaterial({ color: 0x333333, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
+    const floorMesh = new THREE.Mesh(floorGeometry, floorMaterial);
+
+    group.add(floorMesh);
+
+    const doorGeometry = new THREE.PlaneGeometry(this.TRUCK_W, this.TRUCK_H);
+    doorGeometry.translate(this.TRUCK_W / 2, this.TRUCK_H / 2, this.TRUCK_L);
+
+    const doorMaterial = new THREE.MeshBasicMaterial({
+      color: 0xff8800,
+      transparent: true,
+      opacity: 0.15,
+      side: THREE.DoubleSide
+    });
+    const doorMesh = new THREE.Mesh(doorGeometry, doorMaterial);
+
+    const doorEdges = new THREE.EdgesGeometry(doorGeometry);
+    const doorEdgeMaterial = new THREE.LineBasicMaterial({ color: 0xffaa00, linewidth: 3 });
+    const doorWireframe = new THREE.LineSegments(doorEdges, doorEdgeMaterial);
+
+    group.add(doorMesh);
+    group.add(doorWireframe);
+  }
+
+  // Add this method to handle the "Load Current Plan" button
+  public fetchCurrentPlan() {
+    this.logisticsService.loadExistingPlan(1).subscribe({
       next: (data) => {
-        // Map raw DB columns (camelCased by default JSON serialization) to our interface
-        this.packedBoxes = data.map(row => ({
+        const mappedBoxes = data.map(row => ({
           boxId: row.boxId || row.BoxId,
           stopSequence: row.sequenceNumber || row.SequenceNumber,
           length: row.lengthMm || row.LengthMm,
@@ -184,54 +278,16 @@ export class AppComponent implements OnInit, AfterViewInit {
           packedY: row.packedY || row.PackedY,
           packedZ: row.packedZ || row.PackedZ
         }));
-        
-        console.log(`Loaded ${this.packedBoxes.length} boxes from database.`);
-        this.renderBoxes(this.packedBoxes);
+
+        // For the demo, we'll arbitrarily split the existing DB data into the two trucks
+        // based on sequence to visualize the restore feature.
+        this.truckA.packedBoxes = mappedBoxes.filter(b => b.stopSequence <= 2);
+        this.truckB.packedBoxes = mappedBoxes.filter(b => b.stopSequence > 2);
+
+        this.renderBoxes(this.truckA);
+        this.renderBoxes(this.truckB);
       },
-      error: (err) => console.error('Failed to fetch existing plan', err)
+      error: (err: any) => console.error('Failed to fetch existing plan', err)
     });
-  }
-
-  private drawTruckWireframe() {
-    // 1. Draw the standard green truck bounding box
-    const geometry = new THREE.BoxGeometry(this.TRUCK_W, this.TRUCK_H, this.TRUCK_L);
-    geometry.translate(this.TRUCK_W / 2, this.TRUCK_H / 2, this.TRUCK_L / 2);
-    
-    const edges = new THREE.EdgesGeometry(geometry);
-    const material = new THREE.LineBasicMaterial({ color: 0x00ff00, linewidth: 2, opacity: 0.3, transparent: true });
-    const truckWireframe = new THREE.LineSegments(edges, material);
-    
-    this.truckGroup.add(truckWireframe);
-
-    // 2. NEW: Draw the solid Floor (helps ground the 3D perspective)
-    const floorGeometry = new THREE.PlaneGeometry(this.TRUCK_W, this.TRUCK_L);
-    floorGeometry.rotateX(-Math.PI / 2); // Lay it flat
-    floorGeometry.translate(this.TRUCK_W / 2, 0, this.TRUCK_L / 2);
-    const floorMaterial = new THREE.MeshBasicMaterial({ color: 0x333333, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
-    const floorMesh = new THREE.Mesh(floorGeometry, floorMaterial);
-    
-    this.truckGroup.add(floorMesh);
-
-    // 3. NEW: Highlight the Loading Doors (Z = TRUCK_L)
-    const doorGeometry = new THREE.PlaneGeometry(this.TRUCK_W, this.TRUCK_H);
-    // Move it to the very back of the truck
-    doorGeometry.translate(this.TRUCK_W / 2, this.TRUCK_H / 2, this.TRUCK_L);
-    
-    // Create a tinted orange pane for the door
-    const doorMaterial = new THREE.MeshBasicMaterial({ 
-      color: 0xff8800, 
-      transparent: true, 
-      opacity: 0.15, 
-      side: THREE.DoubleSide 
-    });
-    const doorMesh = new THREE.Mesh(doorGeometry, doorMaterial);
-
-    // Add a glowing orange border to the door frame
-    const doorEdges = new THREE.EdgesGeometry(doorGeometry);
-    const doorEdgeMaterial = new THREE.LineBasicMaterial({ color: 0xffaa00, linewidth: 3 });
-    const doorWireframe = new THREE.LineSegments(doorEdges, doorEdgeMaterial);
-
-    this.truckGroup.add(doorMesh);
-    this.truckGroup.add(doorWireframe);
   }
 }

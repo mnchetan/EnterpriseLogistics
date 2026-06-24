@@ -4,6 +4,33 @@ namespace Logistics.Api.Infrastructure
 {
     public static class DatabaseProvisioner
     {
+        private static void HardResetLocalDbInstance()
+        {
+            Console.WriteLine("[Provisioning] FATAL LOCALDB CORRUPTION DETECTED. Executing hard reset of MSSQLLocalDB...");
+
+            try
+            {
+                using System.Diagnostics.Process process = new();
+                process.StartInfo.FileName = "cmd.exe";
+                // Chain the 4 commands together using the '&' operator
+                process.StartInfo.Arguments = "/c sqllocaldb stop MSSQLLocalDB & sqllocaldb delete MSSQLLocalDB & sqllocaldb create MSSQLLocalDB & sqllocaldb start MSSQLLocalDB";
+                process.StartInfo.RedirectStandardOutput = true;
+                process.StartInfo.UseShellExecute = false;
+                process.StartInfo.CreateNoWindow = true; // Run silently
+
+                process.Start();
+                process.WaitForExit();
+
+                Console.WriteLine("[Provisioning] LocalDB hard reset complete. Clean instance started.");
+
+                // Give the SQL Engine a brief moment to accept connections again
+                Thread.Sleep(2000);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Provisioning] Failed to execute CLI reset: {ex.Message}");
+            }
+        }
         public static void EnsureDatabaseAndTableExist()
         {
             string appDirectory = AppDomain.CurrentDomain.BaseDirectory;
@@ -15,15 +42,46 @@ namespace Logistics.Api.Infrastructure
 
             try
             {
-                // 1. Ensure Database Exists
+                // =================================================================
+                // 1. SAFEGUARD: ATTEMPT TO CONNECT AND CLEAN GHOST DBS
+                // =================================================================
+                try
+                {
+                    using SqlConnection masterConn = new(masterConnString);
+                    masterConn.Open();
+                    using SqlCommand checkDbCmd = new("SELECT db_id('LogisticsDB')", masterConn);
+                    object result = checkDbCmd.ExecuteScalar();
+
+                    bool dbRegistered = result != null && result != DBNull.Value;
+                    bool physicalFilesExist = File.Exists(mdfFilePath);
+
+                    if (dbRegistered && !physicalFilesExist)
+                    {
+                        Console.WriteLine("[Provisioning] Ghost database detected. Attempting standard cleanup...");
+                        using SqlCommand dropCmd = new("DROP DATABASE [LogisticsDB]", masterConn);
+                        dropCmd.ExecuteNonQuery();
+                    }
+                }
+                catch (SqlException sqlEx) when (sqlEx.Message.Contains("Operating system error 2") || sqlEx.Message.Contains("File activation failure"))
+                {
+                    // This catches the exact error you received when SQL Server refuses to DROP the DB.
+#if DEBUG
+                    HardResetLocalDbInstance();
+#else
+                    throw new Exception("Database files are missing and the server cannot recover automatically in a non-debug environment.", sqlEx);
+#endif
+                }
+
+                // =================================================================
+                // 2. CREATE DATABASE (Now guaranteed to have a clean slate)
+                // =================================================================
                 using (SqlConnection masterConn = new(masterConnString))
                 {
                     masterConn.Open();
                     using SqlCommand checkDbCmd = new("SELECT db_id('LogisticsDB')", masterConn);
-                    object result = checkDbCmd.ExecuteScalar();
-                    if (result == null || result == DBNull.Value)
+                    if (checkDbCmd.ExecuteScalar() == null || checkDbCmd.ExecuteScalar() == DBNull.Value)
                     {
-                        Console.WriteLine("[Provisioning] Database not found. Creating new .mdf file...");
+                        Console.WriteLine("[Provisioning] Creating new LogisticsDB .mdf file...");
                         string createDbSql = $@"
                                 CREATE DATABASE [LogisticsDB] 
                                 ON PRIMARY (NAME = LogisticsDB_Data, FILENAME = '{mdfFilePath}') 
@@ -34,7 +92,7 @@ namespace Logistics.Api.Infrastructure
                     }
                 }
 
-                // 2. Ensure Tables Exist
+                // 3. Ensure Tables Exist
                 using SqlConnection targetConn = new(targetConnString);
                 targetConn.Open();
 
@@ -99,7 +157,15 @@ namespace Logistics.Api.Infrastructure
                         BEGIN
                             ALTER TABLE [dbo].[Boxes] ADD [IsLocked] BIT NOT NULL DEFAULT 0;
                             PRINT '[Provisioning] Upgraded schema: Added IsLocked column to Boxes table.';
-                        END";
+                        END
+                        -- 5.1 UPGRADE SCHEMA: Add Route Constraints
+                        IF COL_LENGTH('dbo.Orders', 'StartPoint') IS NULL
+                        BEGIN
+                            ALTER TABLE [dbo].[Orders] ADD [StartPoint] INT DEFAULT 1;
+                            ALTER TABLE [dbo].[Orders] ADD [EndPoint] INT DEFAULT 10;
+                            PRINT '[Provisioning] Upgraded schema: Added Route Constraints.';
+                        END
+                        ";
 
                 using (SqlCommand createTableCmd = new(createTablesSql, targetConn))
                 {
@@ -119,94 +185,79 @@ namespace Logistics.Api.Infrastructure
         {
             using SqlConnection conn = new(connectionString);
             conn.Open();
-            Console.WriteLine("[Provisioning] Running massive data seed to stress-test 3D Packing Algorithm...");
+            Console.WriteLine("[Provisioning] Running Fleet data seed (3 Tons + Routing Overlap)...");
 
             string idempotentSeedSql = @"
             -- =================================================================
-            -- VARIABLE DECLARATIONS (Done exactly once)
+            -- 1. CLEANUP PREVIOUS TEST DATA
             -- =================================================================
+            -- Wipe boxes and orders so we start fresh with exactly 3 tons every time
+            DELETE FROM dbo.Boxes;
+            DELETE FROM dbo.Orders;
+            DELETE FROM dbo.Stops;
+
             DECLARE @RouteId BIGINT;
-            DECLARE @Stop1Id BIGINT, @Stop2Id BIGINT, @Stop3Id BIGINT;
-            DECLARE @Order1Id BIGINT, @Order2Id BIGINT, @Order3Id BIGINT;
-            DECLARE @Counter INT;
+            DECLARE @StopId BIGINT;
 
             -- =================================================================
-            -- 1. TRUCK / ROUTE
+            -- 1.5 ENSURE PARENT ROUTE EXISTS (Fixes Foreign Key Error)
             -- =================================================================
-            IF NOT EXISTS (SELECT 1 FROM dbo.Routes WHERE TruckIdentifier = 'TRK-001')
+            IF NOT EXISTS (SELECT 1 FROM dbo.Routes WHERE TruckIdentifier = 'FLEET-001')
             BEGIN
                 INSERT INTO dbo.Routes (TruckIdentifier, TruckLengthMm, TruckWidthMm, TruckHeightMm) 
-                VALUES ('TRK-001', 5300, 2400, 2600);
+                VALUES ('FLEET-001', 5300, 2400, 2600);
                 SET @RouteId = SCOPE_IDENTITY();
             END
-            ELSE BEGIN SELECT @RouteId = RouteId FROM dbo.Routes WHERE TruckIdentifier = 'TRK-001'; END
+            ELSE 
+            BEGIN 
+                SELECT TOP 1 @RouteId = RouteId FROM dbo.Routes WHERE TruckIdentifier = 'FLEET-001'; 
+            END
+            
+            -- Now we can safely insert the Stop using a guaranteed valid RouteId
+            INSERT INTO dbo.Stops (RouteId, SequenceNumber, LocationName, IsPickup) 
+            VALUES (@RouteId, 1, 'Main Distribution Hub', 0);
+            SET @StopId = SCOPE_IDENTITY();
 
             -- =================================================================
-            -- 2. STOPS (3 Deliveries: Deepest, Middle, Doors)
+            -- 2. CREATE ORDERS (Defining Start and End Points)
             -- =================================================================
-            -- Stop 1: Deepest in the truck (Sequence 1)
-            IF NOT EXISTS (SELECT 1 FROM dbo.Stops WHERE RouteId = @RouteId AND LocationName = 'Mega Warehouse (Deepest)')
-            BEGIN
-                INSERT INTO dbo.Stops (RouteId, SequenceNumber, LocationName, IsPickup) VALUES (@RouteId, 1, 'Mega Warehouse (Deepest)', 0);
-                SET @Stop1Id = SCOPE_IDENTITY();
-            END
-            ELSE BEGIN SELECT @Stop1Id = StopId FROM dbo.Stops WHERE RouteId = @RouteId AND LocationName = 'Mega Warehouse (Deepest)'; END
+            DECLARE @OrderA_Id BIGINT; -- Fits ONLY Truck A (Route 1-10)
+            DECLARE @OrderB_Id BIGINT; -- Fits ONLY Truck B (Route 5-15)
+            DECLARE @OrderOverlap_Id BIGINT; -- Fits BOTH Trucks (Route 6-9)
+            DECLARE @OrderReject_Id BIGINT; -- Fits NEITHER Truck (Route 2-14)
 
-            -- Stop 2: Middle of the truck (Sequence 2)
-            IF NOT EXISTS (SELECT 1 FROM dbo.Stops WHERE RouteId = @RouteId AND LocationName = 'Retail Outlet (Middle)')
-            BEGIN
-                INSERT INTO dbo.Stops (RouteId, SequenceNumber, LocationName, IsPickup) VALUES (@RouteId, 2, 'Retail Outlet (Middle)', 0);
-                SET @Stop2Id = SCOPE_IDENTITY();
-            END
-            ELSE BEGIN SELECT @Stop2Id = StopId FROM dbo.Stops WHERE RouteId = @RouteId AND LocationName = 'Retail Outlet (Middle)'; END
+            -- Order A: Start 1, End 4 (Exclusive to Truck A)
+            INSERT INTO dbo.Orders (StopId, CustomerReference, StartPoint, EndPoint) 
+            VALUES (@StopId, 'ORD-TRUCK-A-ONLY', 1, 4);
+            SET @OrderA_Id = SCOPE_IDENTITY();
 
-            -- Stop 3: Near the doors (Sequence 3)
-            IF NOT EXISTS (SELECT 1 FROM dbo.Stops WHERE RouteId = @RouteId AND LocationName = 'Local Boutique (Doors)')
-            BEGIN
-                INSERT INTO dbo.Stops (RouteId, SequenceNumber, LocationName, IsPickup) VALUES (@RouteId, 3, 'Local Boutique (Doors)', 0);
-                SET @Stop3Id = SCOPE_IDENTITY();
-            END
-            ELSE BEGIN SELECT @Stop3Id = StopId FROM dbo.Stops WHERE RouteId = @RouteId AND LocationName = 'Local Boutique (Doors)'; END
+            -- Order B: Start 11, End 14 (Exclusive to Truck B)
+            INSERT INTO dbo.Orders (StopId, CustomerReference, StartPoint, EndPoint) 
+            VALUES (@StopId, 'ORD-TRUCK-B-ONLY', 11, 14);
+            SET @OrderB_Id = SCOPE_IDENTITY();
 
+            -- Order Overlap: Start 6, End 9 (The algorithm must balance this)
+            INSERT INTO dbo.Orders (StopId, CustomerReference, StartPoint, EndPoint) 
+            VALUES (@StopId, 'ORD-OVERLAP-ZONE', 6, 9);
+            SET @OrderOverlap_Id = SCOPE_IDENTITY();
+
+            -- Order Reject: Start 2, End 14 (Too long for either truck)
+            INSERT INTO dbo.Orders (StopId, CustomerReference, StartPoint, EndPoint) 
+            VALUES (@StopId, 'ORD-UNROUTABLE', 2, 14);
+            SET @OrderReject_Id = SCOPE_IDENTITY();
             -- =================================================================
-            -- 3. ORDERS
+            -- 3. GENERATE MASSIVE CARGO (Mixed Fragility)
             -- =================================================================
-            IF NOT EXISTS (SELECT 1 FROM dbo.Orders WHERE CustomerReference = 'ORD-DEEP-01')
-            BEGIN
-                INSERT INTO dbo.Orders (StopId, CustomerReference) VALUES (@Stop1Id, 'ORD-DEEP-01');
-                SET @Order1Id = SCOPE_IDENTITY();
-            END
-            ELSE BEGIN SELECT @Order1Id = OrderId FROM dbo.Orders WHERE CustomerReference = 'ORD-DEEP-01'; END
-
-            IF NOT EXISTS (SELECT 1 FROM dbo.Orders WHERE CustomerReference = 'ORD-MID-02')
-            BEGIN
-                INSERT INTO dbo.Orders (StopId, CustomerReference) VALUES (@Stop2Id, 'ORD-MID-02');
-                SET @Order2Id = SCOPE_IDENTITY();
-            END
-            ELSE BEGIN SELECT @Order2Id = OrderId FROM dbo.Orders WHERE CustomerReference = 'ORD-MID-02'; END
-
-            IF NOT EXISTS (SELECT 1 FROM dbo.Orders WHERE CustomerReference = 'ORD-DOOR-03')
-            BEGIN
-                INSERT INTO dbo.Orders (StopId, CustomerReference) VALUES (@Stop3Id, 'ORD-DOOR-03');
-                SET @Order3Id = SCOPE_IDENTITY();
-            END
-            ELSE BEGIN SELECT @Order3Id = OrderId FROM dbo.Orders WHERE CustomerReference = 'ORD-DOOR-03'; END
-
-            -- =================================================================
-            -- 4. MASSIVE BOX GENERATION
-            -- =================================================================
-            -- Clear out old boxes first so we have a clean test
-            DELETE FROM dbo.Boxes WHERE OrderId IN (@Order1Id, @Order2Id, @Order3Id);
+            DECLARE @Counter INT = 0;
 
             -- -----------------------------------------------------------------
-            -- STOP 1: (Packed deep near the cab)
-            -- Creates 8 massive heavy pallets and 20 fragile top-boxes
+            -- ZONE A (Truck A Only): 20 Sturdy, 12 Fragile
             -- -----------------------------------------------------------------
             SET @Counter = 1;
-            WHILE @Counter <= 8
+            WHILE @Counter <= 20
             BEGIN
                 INSERT INTO dbo.Boxes (OrderId, LengthMm, WidthMm, HeightMm, WeightKg, IsFragile, IsPacked, IsLocked) 
-                VALUES (@Order1Id, 1200, 1000, 1100, 500.0, 0, 0, 0); 
+                VALUES (@OrderA_Id, 500, 500, 500, 30.0, 0, 0, 0);  -- STURDY
                 SET @Counter = @Counter + 1;
             END
 
@@ -214,56 +265,60 @@ namespace Logistics.Api.Infrastructure
             WHILE @Counter <= 20
             BEGIN
                 INSERT INTO dbo.Boxes (OrderId, LengthMm, WidthMm, HeightMm, WeightKg, IsFragile, IsPacked, IsLocked) 
-                VALUES (@Order1Id, 600, 400, 300, 5.0, 1, 0, 0); 
+                VALUES (@OrderA_Id, 500, 500, 400, 10.0, 1, 0, 0);  -- FRAGILE
                 SET @Counter = @Counter + 1;
             END
 
             -- -----------------------------------------------------------------
-            -- STOP 2: (Packed in the middle)
-            -- Creates 40 standard sturdy retail boxes and 30 medium fragile boxes
+            -- ZONE B (Truck B Only): 20 Sturdy, 12 Fragile
             -- -----------------------------------------------------------------
             SET @Counter = 1;
-            WHILE @Counter <= 40
+            WHILE @Counter <= 20
             BEGIN
                 INSERT INTO dbo.Boxes (OrderId, LengthMm, WidthMm, HeightMm, WeightKg, IsFragile, IsPacked, IsLocked) 
-                VALUES (@Order2Id, 500, 500, 500, 25.0, 0, 0, 0); 
+                VALUES (@OrderB_Id, 500, 500, 500, 30.0, 0, 0, 0);  -- STURDY
                 SET @Counter = @Counter + 1;
             END
 
             SET @Counter = 1;
-            WHILE @Counter <= 30
+            WHILE @Counter <= 12
             BEGIN
                 INSERT INTO dbo.Boxes (OrderId, LengthMm, WidthMm, HeightMm, WeightKg, IsFragile, IsPacked, IsLocked) 
-                VALUES (@Order2Id, 500, 500, 400, 10.0, 1, 0, 0); 
+                VALUES (@OrderB_Id, 500, 500, 400, 10.0, 1, 0, 0);  -- FRAGILE
                 SET @Counter = @Counter + 1;
             END
 
             -- -----------------------------------------------------------------
-            -- STOP 3: (Packed near the doors)
-            -- Creates 6 large appliances (sturdy) and 15 long awkward fragile items
+            -- ZONE C (Overlap Balancing): 20 Heavy Pallets, 10 Awkward Fragile
             -- -----------------------------------------------------------------
             SET @Counter = 1;
-            WHILE @Counter <= 6
+            WHILE @Counter <= 20
             BEGIN
                 INSERT INTO dbo.Boxes (OrderId, LengthMm, WidthMm, HeightMm, WeightKg, IsFragile, IsPacked, IsLocked) 
-                VALUES (@Order3Id, 800, 800, 1500, 150.0, 0, 0, 0); 
+                VALUES (@OrderOverlap_Id, 800, 600, 600, 60.0, 0, 0, 0); -- STURDY
                 SET @Counter = @Counter + 1;
             END
 
             SET @Counter = 1;
-            WHILE @Counter <= 15
+            WHILE @Counter <= 10
             BEGIN
                 INSERT INTO dbo.Boxes (OrderId, LengthMm, WidthMm, HeightMm, WeightKg, IsFragile, IsPacked, IsLocked) 
-                VALUES (@Order3Id, 1200, 300, 200, 8.0, 1, 0, 0); 
+                VALUES (@OrderOverlap_Id, 1200, 300, 300, 15.0, 1, 0, 0); -- LONG FRAGILE
                 SET @Counter = @Counter + 1;
             END
-        ";
+
+            -- -----------------------------------------------------------------
+            -- ZONE D (Unroutable Reject): 1 massive box
+            -- -----------------------------------------------------------------
+            INSERT INTO dbo.Boxes (OrderId, LengthMm, WidthMm, HeightMm, WeightKg, IsFragile, IsPacked, IsLocked) 
+            VALUES (@OrderReject_Id, 2000, 1000, 1000, 100.0, 1, 0, 0);
+            ";
 
             using (SqlCommand insertCmd = new(idempotentSeedSql, conn))
             {
                 insertCmd.ExecuteNonQuery();
             }
-            Console.WriteLine("[Provisioning] Successfully generated 119 boxes across 3 stops.");
+            Console.WriteLine("[Provisioning] Successfully generated 3,200 kg of Fleet Cargo data.");
         }
     }
 }

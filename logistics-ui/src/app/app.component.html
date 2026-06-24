@@ -1,64 +1,80 @@
+<div class="dashboard-container">
 
-    <div class="dashboard-container">
-      
+  <div class="header">
+    <h2>Enterprise Fleet Dispatch Engine</h2>
+    <div>
+      <button (click)="fetchCurrentPlan()" class="btn-primary" style="margin-right: 10px;">Load Current Plan</button>
+      <button (click)="runAlgorithm()" class="btn-primary">Dispatch Entire Fleet</button>
+    </div>
+  </div>
+
+  <div class="content-split">
+
+    <div class="canvas-panel">
+      <div class="panel-title">3D Volumetric View (Guillotine Split)</div>
       <div class="header">
         <h2>Enterprise Dispatch Engine</h2>
-        <button (click)="runAlgorithm(1)" class="btn-primary" style="margin-right: -60%;">Calculate Route 1 Load Plan</button>
-        <button (click)="fetchCurrentPlan(1)" class="btn-primary">Load Current Plan</button>
       </div>
-
-      <div class="content-split">
-        
-        <div class="canvas-panel">
-          <div class="panel-title">3D Volumetric View (Guillotine Split)</div>
-          <div class="header">
-        <h2>Enterprise Dispatch Engine</h2>
-      </div>
-          <div #rendererContainer class="render-target"></div>
-          
-          <div class="legend">
-            <span class="legend-item"><div class="color-box blue"></div> Sturdy Base</span>
-            <span class="legend-item"><div class="color-box red"></div> Fragile Top</span>
-          </div>
+      <div class="fleet-dashboard">
+        <div class="viewport">
+          <h3>Truck A (Route 1-10)</h3>
+          <div #rendererContainerA class="canvas-box"></div>
         </div>
 
-        <div class="data-panel">
-          <div class="panel-title">Manifest & Placement Audit</div>
-          
-          <div class="table-container">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>Box ID</th>
-                  <th>Stop</th>
-                  <th>Type</th>
-                  <th>Dims (W x L x H)</th>
-                  <th>Weight</th>
-                  <th>Pos (X, Y, Z)</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr *ngIf="packedBoxes.length === 0">
-                  <td colspan="6" class="empty-state">No load plan calculated yet.</td>
-                </tr>
-                
-                <tr *ngFor="let box of packedBoxes" 
-                    [ngClass]="{'fragile-row': box.isFragile, 'sturdy-row': !box.isFragile}">
-                  <td>#{{ box.boxId }}</td>
-                  <td>Stop {{ box.stopSequence }}</td>
-                  <td>
-                    <span class="badge" [ngClass]="box.isFragile ? 'badge-red' : 'badge-blue'">
-                      {{ box.isFragile ? 'Fragile' : 'Sturdy' }}
-                    </span>
-                  </td>
-                  <td>{{ box.width }} x {{ box.length }} x {{ box.height }}</td>
-                  <td>{{ box.weight }} kg</td>
-                  <td class="coords">({{ box.packedX }}, {{ box.packedY }}, {{ box.packedZ }})</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+        <div class="viewport">
+          <h3>Truck B (Route 5-15)</h3>
+          <div #rendererContainerB class="canvas-box"></div>
         </div>
+      </div>
 
+      <div class="legend">
+        <span class="legend-item">
+          <div class="color-box blue"></div> Sturdy Base
+        </span>
+        <span class="legend-item">
+          <div class="color-box red"></div> Fragile Top
+        </span>
       </div>
     </div>
+
+    <div class="data-panel">
+      <div class="panel-title">Manifest & Placement Audit</div>
+
+      <div class="table-container">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Box ID</th>
+              <th>Stop</th>
+              <th>Type</th>
+              <th>Dims (W x L x H)</th>
+              <th>Weight</th>
+              <th>Pos (X, Y, Z)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngIf="packedBoxes.length === 0">
+              <td colspan="6" class="empty-state">No load plan calculated yet.</td>
+            </tr>
+
+            <tr *ngFor="let box of packedBoxes"
+              [ngClass]="{'fragile-row': box.isFragile, 'sturdy-row': !box.isFragile}">
+              <td>#{{ box.boxId }}</td>
+              <td>{{ box.isPacked ? 'Packed' : 'Unpacked' }}</td>
+              <td>Stop {{ box.stopSequence }}</td>
+              <td>
+                <span class="badge" [ngClass]="box.isFragile ? 'badge-red' : 'badge-blue'">
+                  {{ box.isFragile ? 'Fragile' : 'Sturdy' }}
+                </span>
+              </td>
+              <td>{{ box.width }} x {{ box.length }} x {{ box.height }}</td>
+              <td>{{ box.weight }} kg</td>
+              <td class="coords">({{ box.packedX }}, {{ box.packedY }}, {{ box.packedZ }})</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>

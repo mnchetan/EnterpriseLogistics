@@ -24,6 +24,8 @@
         public int PackedY { get; set; }
         public int PackedZ { get; set; }
         public bool IsLocked { get; internal set; }
+        public int StartPoint { get; set; }
+        public int EndPoint { get; set; }
     }
 
     public class FreeSpace
@@ -37,5 +39,21 @@
 
         // Volume helps us prioritize which spaces to fill first
         public long Volume => (long)Width * Length * Height;
+    }
+
+    public class Truck
+    {
+        public string Id { get; set; } = string.Empty;
+        public int RouteStart { get; set; }
+        public int RouteEnd { get; set; }
+        public decimal Capacity { get; set; }
+        public decimal CurrentLoad { get; set; }
+        public decimal RemainingCapacity => Capacity - CurrentLoad;
+        public List<CargoBox> Boxes { get; set; } = [];
+
+        // NEW: Add dimensions so the 3D algorithm can read them!
+        public int Width { get; set; } = 2400;
+        public int Length { get; set; } = 5300;
+        public int Height { get; set; } = 2600;
     }
 }

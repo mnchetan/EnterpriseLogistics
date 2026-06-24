@@ -54,7 +54,7 @@
         "IntegerFieldName": []
       }
     ],
-    "Query": "SELECT b.BoxId, b.LengthMm, b.WidthMm, b.HeightMm, b.WeightKg, b.IsFragile FROM dbo.Boxes b INNER JOIN dbo.Orders o ON b.OrderId = o.OrderId INNER JOIN dbo.Stops s ON o.StopId = s.StopId WHERE s.RouteId = @RouteId",
+    "Query": "SELECT b.BoxId, b.WeightKg, b.WidthMm, b.LengthMm, b.HeightMm, b.IsFragile, b.IsLocked, 0 AS IsPacked, b.PackedX, b.PackedY, b.PackedZ, o.StartPoint, o.EndPoint, s.SequenceNumber FROM dbo.Boxes b JOIN dbo.Orders o ON b.OrderId = o.OrderId JOIN dbo.Stops s ON o.StopId = s.StopId",
     "IsCachingRequired": false,
     "CacheDurationInSeconds": 0,
     "SourceDestinationColumnMapping": []
@@ -84,7 +84,7 @@
         "IntegerFieldName": []
       }
     ],
-    "Query": "UPDATE dbo.Boxes SET IsPacked = 1, PackedX = @PackedX, PackedY = @PackedY, PackedZ = @PackedZ WHERE BoxId = @BoxId",
+    "Query": "UPDATE dbo.Boxes SET PackedX = @PackedX, PackedY = @PackedY, PackedZ = @PackedZ, IsPacked = 1 WHERE BoxId = @BoxId",
     "IsCachingRequired": false,
     "CacheDurationInSeconds": 0,
     "SourceDestinationColumnMapping": []
@@ -178,5 +178,19 @@
     "IsCachingRequired": false,
     "CacheDurationInSeconds": 0,
     "SourceDestinationColumnMapping": []
+  },
+  "GetAllPendingCargo": {
+    "Query": "SELECT b.BoxId, b.WeightKg, b.WidthMm, b.LengthMm, b.HeightMm, b.IsFragile, b.IsLocked, b.IsPacked, b.PackedX, b.PackedY, b.PackedZ, o.StartPoint, o.EndPoint, s.SequenceNumber FROM dbo.Boxes b JOIN dbo.Orders o ON b.OrderId = o.OrderId JOIN dbo.Stops s ON o.StopId = s.StopId",
+    "DatabaseSpecificationName": "LogisticsDb",
+    "ExecutionType": "DataTableText",
+    "DatabaseInput": [],
+    "DatabaseOutput": []
+  },
+  "GetPackedCargo": {
+    "Query": "SELECT b.BoxId, b.WeightKg, b.WidthMm, b.LengthMm, b.HeightMm, b.IsFragile, b.IsLocked, b.IsPacked, b.PackedX, b.PackedY, b.PackedZ, o.StartPoint, o.EndPoint, s.SequenceNumber FROM dbo.Boxes b JOIN dbo.Orders o ON b.OrderId = o.OrderId JOIN dbo.Stops s ON o.StopId = s.StopId WHERE b.IsPacked = 1",
+    "DatabaseSpecificationName": "LogisticsDb",
+    "ExecutionType": "DataTableText",
+    "DatabaseInput": [],
+    "DatabaseOutput": []
   }
 }
