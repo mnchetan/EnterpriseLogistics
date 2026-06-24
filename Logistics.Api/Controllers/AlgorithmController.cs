@@ -459,36 +459,23 @@ namespace Logistics.Api.Controllers
 
         private static void DispatchCargoToTrucks(List<CargoBox> allCargo, List<Truck> trucks)
         {
-            // 1. Sort cargo by weight (Largest first) to maximize space usage
-            List<CargoBox> sortedCargo = [.. allCargo.OrderByDescending(c => c.Weight)];
-
-            foreach (CargoBox box in sortedCargo)
+            // Group boxes by their specific route needs
+            foreach (CargoBox? box in allCargo.OrderByDescending(b => b.Weight))
             {
-                Console.WriteLine(
-    $"BOX={box.BoxId} " +
-    $"Fragile={box.IsFragile} " +
-    $"Route={box.StartPoint}-{box.EndPoint}");
-                // 2. Identify available trucks for this specific box
-                // A truck can take the box if:
-                // (CurrentLoad + box.Weight <= 2000kg) AND (The box route fits within the truck's route)
-                List<Truck> viableTrucks = [.. trucks.Where(t =>
-                    (t.CurrentLoad + box.Weight <= 2000) &&
-                    (box.StartPoint >= t.RouteStart && box.EndPoint <= t.RouteEnd)
-                ).OrderByDescending(t => t.RemainingCapacity)];
-                Console.WriteLine(
-    $"BOX={box.BoxId} " +
-    $"Fragile={box.IsFragile} " +
-    $"Viable={viableTrucks.Count}");
-                if (viableTrucks.Count != 0)
+                // Find trucks that can legally take this route
+                var viableTrucks = trucks.Where(t =>
+                    box.StartPoint >= t.RouteStart && box.EndPoint <= t.RouteEnd &&
+                    (t.CurrentLoad + box.Weight <= t.Capacity)
+                ).ToList();
+
+                // Balanced Allocation: Pick the truck with the most remaining capacity
+                Truck? targetTruck = viableTrucks.OrderByDescending(t => t.RemainingCapacity).FirstOrDefault();
+
+                if (targetTruck != null)
                 {
-                    Truck bestTruck = viableTrucks.First(); // Pick the one with most room
-                    bestTruck.Boxes.Add(box);
-                    bestTruck.CurrentLoad += box.Weight;
-                }
-                else
-                {
-                    Global.LogWarning($"[Dispatcher] Box {box.BoxId} cannot be delivered: No viable truck.");
-                    box.IsPacked = false;
+                    targetTruck.Boxes.Add(box);
+                    targetTruck.CurrentLoad += box.Weight;
+                    box.IsPacked = true;
                 }
             }
         }
@@ -563,7 +550,7 @@ namespace Logistics.Api.Controllers
 
             // NEW: After the trucks are packed, find all boxes that were left behind
             // (Either because of weight limits, route mismatch, or physical 3D space rejection)
-            List<CargoBox> leftBehindCargo = allCargo.Where(b => !b.IsPacked).ToList();
+            List<CargoBox> leftBehindCargo = [.. allCargo.Where(b => !b.IsPacked)];
             foreach (CargoBox? box in allCargo.Where(x => x.IsFragile).Take(20))
             {
                 Console.WriteLine(
